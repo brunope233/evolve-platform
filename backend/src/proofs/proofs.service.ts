@@ -6,12 +6,12 @@ import { User } from 'src/users/user.entity';
 import { CreateProofDto } from './dto/create-proof.dto';
 import { JourneysService } from 'src/journeys/journeys.service';
 import { EventsGateway } from 'src/websockets/events.gateway';
-import * as fs from 'fs/promises';
-import { join } from 'path';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationType } from 'src/notifications/notification.entity';
+import { UploadService } from 'src/upload/upload.service';
+import { extname } from 'path';
 
 @Injectable()
 export class ProofsService {
@@ -22,18 +22,25 @@ export class ProofsService {
     private eventsGateway: EventsGateway,
     private readonly httpService: HttpService,
     private readonly notificationsService: NotificationsService,
+    private readonly uploadService: UploadService,
   ) {}
 
-  async create(createProofDto: CreateProofDto, user: User, videoFileName: string): Promise<Proof> {
+  async create(createProofDto: CreateProofDto, user: User, file: Express.Multer.File): Promise<Proof> {
     const { journeyId, title, description, requestRealTimeSeal, parentProofId } = createProofDto;
 
     const journey = await this.journeysService.findOneById(journeyId);
     if (!journey) { throw new NotFoundException(`Jornada com ID "${journeyId}" não encontrada.`); }
     
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const videoFileName = `${uniqueSuffix}${extname(file.originalname)}`;
+    const destination = `proofs/${videoFileName}`;
+
+    const publicUrl = await this.uploadService.uploadFile(file, destination);
+
     const proofData: Partial<Proof> = {
       title, description, journey, user,
       hasRealTimeSeal: !!requestRealTimeSeal,
-      originalVideoUrl: `uploads/${videoFileName}`,
+      originalVideoUrl: publicUrl,
       status: ProofStatus.PROCESSING,
     };
     
@@ -48,7 +55,7 @@ export class ProofsService {
     const savedProof = await this.proofsRepository.save(newProof);
     
     try {
-        await firstValueFrom( this.httpService.post('http://video-processor:3002/process', { proofId: savedProof.id, videoFileName: videoFileName }) );
+        await firstValueFrom( this.httpService.post('http://video-processor:3002/process', { proofId: savedProof.id, videoFileName: destination }) );
     } catch (error) { console.error("Falha ao disparar job:", error.message); }
 
     const fullProofForSocket = await this.proofsRepository.findOne({ where: { id: savedProof.id }, relations: ['parentProof', 'user'] });
@@ -59,7 +66,7 @@ export class ProofsService {
   
   async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string): Promise<void> {
     const proof = await this.proofsRepository.findOne({ where: { id: proofId }, relations: ['journey', 'user', 'comments', 'supports', 'assists', 'parentProof'] });
-    if (!proof) { throw new NotFoundException(`Proof com ID "${proofId}" não encontrada.`); }
+    if (!proof) { throw new NotFoundException(`Proof with ID "${proofId}" não encontrada.`); }
 
     proof.status = status;
     if (thumbnailUrl) { proof.thumbnailUrl = thumbnailUrl; }
@@ -74,12 +81,12 @@ export class ProofsService {
     if (proof.user.id !== user.id) { throw new ForbiddenException('Você não tem permissão para deletar esta prova.'); }
 
     if (proof.originalVideoUrl) {
-        const filePath = join(process.cwd(), proof.originalVideoUrl);
-        try { await fs.unlink(filePath); } catch (error) { console.error(`Erro ao deletar vídeo:`, error); }
+        const fileName = new URL(proof.originalVideoUrl).pathname.split('/').pop();
+        await this.uploadService.deleteFile(`proofs/${fileName}`);
     }
     if (proof.thumbnailUrl) {
-        const thumbPath = join(process.cwd(), proof.thumbnailUrl);
-        try { await fs.unlink(thumbPath); } catch (error) { console.error(`Erro ao deletar thumbnail:`, error); }
+        const thumbName = new URL(proof.thumbnailUrl).pathname.split('/').pop();
+        await this.uploadService.deleteFile(`proofs/thumbnails/${thumbName}`);
     }
 
     await this.proofsRepository.delete(proofId);
@@ -87,11 +94,7 @@ export class ProofsService {
   }
 
   async markAsBestAssist(parentProofId: string, assistId: string, user: User): Promise<Proof> {
-    const parentProof = await this.proofsRepository.findOne({
-      where: { id: parentProofId },
-      relations: ['journey', 'journey.user', 'assists', 'comments', 'supports'],
-    });
-
+    const parentProof = await this.proofsRepository.findOne({ where: { id: parentProofId }, relations: ['journey', 'journey.user', 'assists', 'comments', 'supports'] });
     if (!parentProof) { throw new NotFoundException('O pedido de ajuda original não foi encontrado.'); }
     if (parentProof.journey.user.id !== user.id) { throw new ForbiddenException('Apenas o autor pode marcar a melhor resposta.'); }
 

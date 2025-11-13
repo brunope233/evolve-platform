@@ -4,10 +4,10 @@ import { Repository, ILike } from 'typeorm';
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import * as fs from 'fs/promises';
-import { join } from 'path';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationType } from 'src/notifications/notification.entity';
+import { UploadService } from 'src/upload/upload.service';
+import { extname } from 'path';
 
 @Injectable()
 export class UsersService {
@@ -15,6 +15,7 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly notificationsService: NotificationsService,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -37,29 +38,14 @@ export class UsersService {
   }
 
   async findOneByUsername(username: string, currentUserId?: string): Promise<any> {
-    const user = await this.usersRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.journeys', 'journeys')
-      .leftJoinAndSelect('journeys.user', 'journeyUser')
-      .loadRelationCountAndMap('user.followerCount', 'user.followers')
-      .loadRelationCountAndMap('user.followingCount', 'user.following')
-      .where('LOWER(user.username) = LOWER(:username)', { username })
-      .orderBy('journeys.createdAt', 'DESC')
-      .getOne();
-
+    const user = await this.usersRepository.createQueryBuilder('user').leftJoinAndSelect('user.journeys', 'journeys').leftJoinAndSelect('journeys.user', 'journeyUser').loadRelationCountAndMap('user.followerCount', 'user.followers').loadRelationCountAndMap('user.followingCount', 'user.following').where('LOWER(user.username) = LOWER(:username)', { username }).orderBy('journeys.createdAt', 'DESC').getOne();
     if (!user) { throw new NotFoundException(`User with username "${username}" not found`); }
 
     let isFollowing = false;
     if (currentUserId && currentUserId !== user.id) {
-        const currentUser = await this.usersRepository.findOne({ 
-            where: { id: currentUserId },
-            relations: ['following']
-        });
-        if (currentUser) {
-            isFollowing = currentUser.following.some(followedUser => followedUser.id === user.id);
-        }
+        const currentUser = await this.usersRepository.findOne({ where: { id: currentUserId }, relations: ['following'] });
+        if (currentUser) { isFollowing = currentUser.following.some(followedUser => followedUser.id === user.id); }
     }
-    
     const { password, ...result } = user;
     return { ...result, isFollowing };
   }
@@ -70,20 +56,23 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async updateAvatar(userId: string, avatarPath: string): Promise<User> {
+  async updateAvatar(userId: string, file: Express.Multer.File): Promise<User> {
     const user = await this.findOneById(userId);
-    const oldAvatarPath = user.avatarUrl;
+    const oldAvatarUrl = user.avatarUrl;
+    
+    const destination = `avatars/${userId}${extname(file.originalname)}`;
+    const publicUrl = await this.uploadService.uploadFile(file, destination);
 
-    user.avatarUrl = avatarPath.replace(/\\/g, '/');
+    user.avatarUrl = publicUrl;
     const updatedUser = await this.usersRepository.save(user);
 
-    if (oldAvatarPath) {
-      const fullOldPath = join(process.cwd(), oldAvatarPath);
+    if (oldAvatarUrl) {
       try {
-        await fs.unlink(fullOldPath);
-        console.log(`Avatar antigo deletado: ${fullOldPath}`);
+        const oldFileName = new URL(oldAvatarUrl).pathname.split('/').pop();
+        await this.uploadService.deleteFile(`avatars/${oldFileName}`);
+        console.log(`Avatar antigo deletado do GCS: avatars/${oldFileName}`);
       } catch (error) {
-        console.error(`Erro ao deletar avatar antigo ${fullOldPath}:`, error.message);
+        console.error('Falha ao deletar avatar antigo do GCS:', error.message);
       }
     }
     
@@ -110,13 +99,11 @@ export class UsersService {
     } else {
       follower.following.push(userToFollow);
       await this.usersRepository.save(follower);
-
       await this.notificationsService.createNotification({
         recipient: userToFollow,
         sender: follower,
         type: NotificationType.NEW_FOLLOWER,
       });
-
       return { following: true };
     }
   }

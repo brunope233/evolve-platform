@@ -3,8 +3,6 @@ import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
 import { JwtAuthGuardOptional } from 'src/auth/jwt-auth.guard.optional';
 
 @Controller('users')
@@ -14,7 +12,6 @@ export class UsersController {
   @Get('profile/:username')
   @UseGuards(JwtAuthGuardOptional)
   findOneByUsername(@Param('username') username: string, @Req() req) {
-    // req.user existirá se um token válido for enviado, caso contrário será nulo
     const currentUserId = req.user?.id; 
     return this.usersService.findOneByUsername(username, currentUserId);
   }
@@ -29,29 +26,19 @@ export class UsersController {
   @Post('profile/avatar')
   @UseGuards(AuthGuard('jwt'))
   @UseInterceptors(FileInterceptor('avatar', {
-    storage: diskStorage({
-      destination: './uploads/avatars',
-      filename: (req, file, callback) => {
-        const user = req.user as any;
-        const filename = `${user.id}${extname(file.originalname)}`;
-        callback(null, filename);
-      },
-    }),
+    limits: { fileSize: 1024 * 1024 * 5 }, // 5MB
     fileFilter: (req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
-            return callback(new BadRequestException('Apenas arquivos de imagem são permitidos!'), false);
+            return callback(new BadRequestException('Apenas imagens são permitidas!'), false);
         }
         callback(null, true);
     },
-    limits: {
-        fileSize: 1024 * 1024 * 5
-    }
   }))
-  uploadAvatar(@Request() req, @UploadedFile() file: any) {
+  uploadAvatar(@Request() req, @UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('Nenhum arquivo de imagem recebido.');
     }
-    return this.usersService.updateAvatar(req.user.id, file.path);
+    return this.usersService.updateAvatar(req.user.id, file);
   }
 
   @UseGuards(AuthGuard('jwt'))
