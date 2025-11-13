@@ -1,0 +1,21 @@
+.feedContainer {
+    padding: 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+}
+.title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 2rem;
+}
+.proofsList {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+.emptyFeed {
+    text-align: center;
+    padding: 4rem 2rem;
+    background-color: var(--card-bg);
+    border-radius: 12px;
+}

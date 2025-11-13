@@ -1,0 +1,60 @@
+.proofCard {
+    background-color: var(--card-bg);
+    border: 1px solid var(--gray-light);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    max-width: 600px;
+    width: 100%;
+}
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+}
+.userInfo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.userDetails {
+    display: flex;
+    flex-direction: column;
+}
+.username {
+    font-weight: 600;
+}
+.timestamp {
+    font-size: 0.8rem;
+    color: var(--gray-medium);
+}
+.journeyInfo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--gray-medium);
+}
+.journeyLink {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+.videoContainer {
+    position: relative;
+    background-color: #000;
+}
+.videoPlayer {
+    width: 100%;
+    display: block;
+}
+.processingOverlay, .realTimeSeal { /* Estilos já existem em JourneyDetail.module.css, mas repetimos para independência */ }
+.proofInfo {
+    padding: 1rem;
+}
+.proofHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}

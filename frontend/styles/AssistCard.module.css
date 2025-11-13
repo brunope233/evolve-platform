@@ -1,0 +1,44 @@
+.assistCard {
+    background-color: var(--background-color);
+    border: 1px solid var(--gray-light);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: all 0.2s ease-in-out;
+}
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+.userInfo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+}
+.bestBadge {
+    font-weight: 700;
+    color: #ca8a04; /* Amarelo/Ouro */
+}
+.description {
+    font-size: 0.9rem;
+    color: var(--gray-medium);
+    margin-bottom: 1rem;
+}
+.videoPlayer {
+    width: 100%;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+.bestAssist {
+    border-color: #ca8a04;
+    box-shadow: 0 0 10px rgba(202, 138, 4, 0.3);
+}
+.markBestButton {
+    width: 100%;
+    background-color: #16a34a; /* Verde */
+}
+.markBestButton:hover {
+    background-color: #15803d;
+}

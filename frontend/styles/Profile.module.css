@@ -1,0 +1,81 @@
+.profileContainer {
+    width: 100%;
+}
+
+.profileHeader {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.username {
+    font-size: 3rem;
+    font-weight: 800;
+}
+
+.bio {
+    font-size: 1.125rem;
+    color: var(--gray-medium);
+    max-width: 600px;
+    margin: 0.5rem auto 0 auto;
+}
+
+.divider {
+    border: none;
+    height: 1px;
+    background-color: var(--gray-light);
+    margin: 2rem 0;
+}
+
+.journeysTitle {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 2rem;
+}
+
+.journeysGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+.editButton {
+    display: inline-block;
+    margin-top: 1.5rem;
+    padding: 0.6rem 1.2rem;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+}
+
+.editButton:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.statsContainer {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1.5rem;
+        font-size: 1.1rem;
+    }
+
+    .followButton {
+        margin-top: 1.5rem;
+        padding: 0.75rem 2rem;
+        font-size: 1rem;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        background-color: var(--primary-color);
+        color: white;
+        transition: background-color 0.2s ease-in-out;
+    }
+
+    .followButton.following {
+        background-color: var(--gray-light);
+        color: var(--text-color);
+        border: 1px solid var(--gray-medium);
+    }

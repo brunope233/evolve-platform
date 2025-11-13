@@ -1,0 +1,39 @@
+.paginationContainer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--gray-light);
+}
+
+.button {
+    padding: 0.75rem 1.5rem;
+    border: 1px solid var(--gray-light);
+    border-radius: 8px;
+    font-weight: 500;
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow);
+    transition: all 0.2s ease-in-out;
+}
+
+.button:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.disabled {
+    color: var(--gray-medium);
+    background-color: var(--background-color);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.disabled:hover {
+    border-color: var(--gray-light);
+    color: var(--gray-medium);
+}
+
+.paginationContainer span {
+    font-weight: 600;
+}

@@ -1,0 +1,31 @@
+.supportButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: var(--gray-light);
+    color: var(--text-color);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+    border: 1px solid transparent;
+}
+
+.supportButton:hover {
+    background-color: #fecaca; /* Rosa claro no hover */
+    color: #dc2626; /* Vermelho escuro no hover */
+}
+
+.supported {
+    background-color: #ef4444; /* Vermelho */
+    color: white;
+    border-color: #dc2626; /* Vermelho escuro */
+}
+
+.supported:hover {
+    background-color: #dc2626;
+}
+
+.count {
+    font-variant-numeric: tabular-nums;
+}

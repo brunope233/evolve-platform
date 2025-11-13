@@ -1,0 +1,10 @@
+.avatarContainer {
+    position: relative;
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: var(--gray-light);
+}
+
+.avatarImage {
+    object-fit: cover; /* Garante que a imagem preencha o círculo sem distorcer */
+}

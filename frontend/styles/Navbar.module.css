@@ -1,0 +1,108 @@
+.navbar {
+    width: 100%;
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow);
+    padding: 1rem 2rem;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.navLinks {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.navLinks a {
+    font-weight: 500;
+    color: var(--text-color);
+    transition: color 0.2s ease-in-out;
+}
+
+.navLinks a:hover {
+    color: var(--primary-color);
+}
+
+.logoutButton {
+    background-color: transparent;
+    color: var(--secondary-color);
+    padding: 0;
+}
+.logoutButton:hover {
+    background-color: transparent;
+    text-decoration: underline;
+} 
+
+/* Ajustes no layout do container */
+.container {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr; /* Esquerda, Centro, Direita */
+    align-items: center;
+    gap: 2rem;
+}
+
+.leftNav {
+    justify-self: start;
+}
+
+.centerNav {
+    justify-self: center;
+}
+
+.navLinks {
+    justify-self: end;
+}
+
+/* Estilos da barra de busca */
+.searchForm {
+    display: flex;
+    align-items: center;
+    background-color: var(--background-color);
+    border: 1px solid var(--gray-light);
+    border-radius: 999px;
+    padding: 0.25rem;
+}
+
+.searchInput {
+    border: none;
+    background: none;
+    outline: none;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    width: 300px;
+}
+
+.searchButton {
+    background-color: var(--primary-color);
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1.2rem;
+}
+
+.searchButton:hover {
+    background-color: #4338ca;
+}
+
+.avatarPlaceholder {
+    width: 32px;
+    height: 32px;
+    background-color: var(--gray-light);
+    border-radius: 50%;
+}

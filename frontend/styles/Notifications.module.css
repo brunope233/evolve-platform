@@ -1,0 +1,68 @@
+.notificationContainer {
+    position: relative;
+}
+
+.bellButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    position: relative;
+    padding: 0.5rem;
+}
+
+.unreadIndicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 10px;
+    height: 10px;
+    background-color: #ef4444; /* Vermelho */
+    border-radius: 50%;
+    border: 2px solid var(--card-bg);
+}
+
+.dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 350px;
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    border: 1px solid var(--gray-light);
+    z-index: 10;
+    margin-top: 0.5rem;
+}
+
+.dropdownHeader {
+    padding: 1rem;
+    border-bottom: 1px solid var(--gray-light);
+}
+
+.dropdownBody {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.notificationItem {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.notificationItem:hover {
+    background-color: var(--background-color);
+}
+
+.notificationContent {
+    font-size: 0.9rem;
+}
+
+.noNotifications {
+    padding: 2rem;
+    text-align: center;
+    color: var(--gray-medium);
+}
