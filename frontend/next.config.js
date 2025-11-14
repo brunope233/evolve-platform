@@ -1,11 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // A configuração de imagens para domínios externos ainda é necessária
   images: {
-    // Esta configuração diz ao Next.js para não tentar otimizar as imagens
-    // que são URLs absolutas. Ele simplesmente as passará direto para o src.
-    loader: 'custom',
-    loaderFile: './src/image-loader.js',
+    remotePatterns: [
+      {
+        protocol: 'https', // Use https para produção
+        hostname: 'storage.googleapis.com', // O hostname real do GCS
+        pathname: '/evolve-platform-uploads-bruno/**', // O nome do seu bucket
+      },
+    ],
   },
 };
 
