@@ -1,6 +1,6 @@
 import { Journey } from '../journeys/journey.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, BeforeInsert, ManyToMany, JoinTable } from 'typeorm';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { Comment } from '../comments/comment.entity';
 import { Support } from '../supports/support.entity';
 import { Notification } from '../notifications/notification.entity';
