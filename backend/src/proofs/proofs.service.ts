@@ -35,17 +35,20 @@ export class ProofsService {
     const videoFileName = `${uniqueSuffix}${extname(file.originalname)}`;
     const destination = `proofs/${videoFileName}`;
 
-    const publicUrl = await this.uploadService.uploadFile(file, destination);
+    await this.uploadService.uploadFile(file, destination);
 
     const proofData: Partial<Proof> = {
       title, description, journey, user,
       hasRealTimeSeal: !!requestRealTimeSeal,
-      originalVideoUrl: publicUrl,
+      originalVideoUrl: destination, // Salva apenas o caminho relativo
       status: ProofStatus.PROCESSING,
     };
     
     if (parentProofId) {
-        const parentProof = await this.proofsRepository.findOne({ where: { id: parentProofId }, relations: ['journey', 'journey.user'] });
+        const parentProof = await this.proofsRepository.findOne({
+            where: { id: parentProofId },
+            relations: ['journey', 'journey.user']
+        });
         if (!parentProof) { throw new NotFoundException('Prova original não encontrada.'); }
         if (parentProof.journey.user.id === user.id) { throw new ForbiddenException('Você não pode responder à sua própria prova.'); }
         proofData.parentProof = parentProof;
@@ -55,17 +58,28 @@ export class ProofsService {
     const savedProof = await this.proofsRepository.save(newProof);
     
     try {
-        await firstValueFrom( this.httpService.post('http://video-processor:3002/process', { proofId: savedProof.id, videoFileName: destination }) );
-    } catch (error) { console.error("Falha ao disparar job:", error.message); }
+        await firstValueFrom(
+            this.httpService.post('http://video-processor:3002/process', {
+                proofId: savedProof.id,
+                videoFileName: destination, // Envia o caminho relativo
+            })
+        );
+    } catch (error) { console.error("Falha ao disparar job para o video-processor:", error.message); }
 
-    const fullProofForSocket = await this.proofsRepository.findOne({ where: { id: savedProof.id }, relations: ['parentProof', 'user'] });
+    const fullProofForSocket = await this.proofsRepository.findOne({
+        where: { id: savedProof.id },
+        relations: ['parentProof', 'user'],
+    });
     this.eventsGateway.server.emit(`journey:${journeyId}:proof_added`, fullProofForSocket);
     
     return savedProof;
   }
   
   async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string): Promise<void> {
-    const proof = await this.proofsRepository.findOne({ where: { id: proofId }, relations: ['journey', 'user', 'comments', 'supports', 'assists', 'parentProof'] });
+    const proof = await this.proofsRepository.findOne({
+        where: { id: proofId },
+        relations: ['journey', 'user', 'comments', 'supports', 'assists', 'parentProof'],
+    });
     if (!proof) { throw new NotFoundException(`Proof with ID "${proofId}" não encontrada.`); }
 
     proof.status = status;
@@ -81,12 +95,10 @@ export class ProofsService {
     if (proof.user.id !== user.id) { throw new ForbiddenException('Você não tem permissão para deletar esta prova.'); }
 
     if (proof.originalVideoUrl) {
-        const fileName = new URL(proof.originalVideoUrl).pathname.split('/').pop();
-        await this.uploadService.deleteFile(`proofs/${fileName}`);
+        await this.uploadService.deleteFile(proof.originalVideoUrl);
     }
     if (proof.thumbnailUrl) {
-        const thumbName = new URL(proof.thumbnailUrl).pathname.split('/').pop();
-        await this.uploadService.deleteFile(`proofs/thumbnails/${thumbName}`);
+        await this.uploadService.deleteFile(proof.thumbnailUrl);
     }
 
     await this.proofsRepository.delete(proofId);
@@ -94,7 +106,11 @@ export class ProofsService {
   }
 
   async markAsBestAssist(parentProofId: string, assistId: string, user: User): Promise<Proof> {
-    const parentProof = await this.proofsRepository.findOne({ where: { id: parentProofId }, relations: ['journey', 'journey.user', 'assists', 'comments', 'supports'] });
+    const parentProof = await this.proofsRepository.findOne({
+      where: { id: parentProofId },
+      relations: ['journey', 'journey.user', 'assists', 'comments', 'supports'],
+    });
+
     if (!parentProof) { throw new NotFoundException('O pedido de ajuda original não foi encontrado.'); }
     if (parentProof.journey.user.id !== user.id) { throw new ForbiddenException('Apenas o autor pode marcar a melhor resposta.'); }
 

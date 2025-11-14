@@ -28,7 +28,7 @@ export class UsersService {
   }
   
   async findOneByEmailForAuth(email: string): Promise<User | undefined> {
-    return this.usersRepository.createQueryBuilder('user').where('user.email = :email', { email }).addSelect('user.password').getOne();
+    return this.usersRepository.createQueryBuilder('user').where('LOWER(user.email) = LOWER(:email)', { email }).addSelect('user.password').getOne();
   }
 
   async findOneById(id: string): Promise<User> {
@@ -61,16 +61,15 @@ export class UsersService {
     const oldAvatarUrl = user.avatarUrl;
     
     const destination = `avatars/${userId}${extname(file.originalname)}`;
-    const publicUrl = await this.uploadService.uploadFile(file, destination);
+    await this.uploadService.uploadFile(file, destination);
 
-    user.avatarUrl = publicUrl;
+    user.avatarUrl = destination; // Salva apenas o caminho relativo
     const updatedUser = await this.usersRepository.save(user);
 
     if (oldAvatarUrl) {
       try {
-        const oldFileName = new URL(oldAvatarUrl).pathname.split('/').pop();
-        await this.uploadService.deleteFile(`avatars/${oldFileName}`);
-        console.log(`Avatar antigo deletado do GCS: avatars/${oldFileName}`);
+        // O oldAvatarUrl agora é apenas o caminho relativo
+        await this.uploadService.deleteFile(oldAvatarUrl);
       } catch (error) {
         console.error('Falha ao deletar avatar antigo do GCS:', error.message);
       }
@@ -81,30 +80,20 @@ export class UsersService {
   }
 
   async toggleFollow(followerId: string, followingUsername: string): Promise<{ following: boolean }> {
-    if (!followerId || !followingUsername) { throw new ForbiddenException('Ação inválida.'); }
-    
     const follower = await this.findOneById(followerId);
     const userToFollow = await this.usersRepository.findOne({ where: { username: ILike(followingUsername) } });
-
-    if (!userToFollow || follower.id === userToFollow.id) {
-      throw new NotFoundException(`Usuário "${followingUsername}" não encontrado ou ação inválida.`);
-    }
+    if (!userToFollow || follower.id === userToFollow.id) { throw new NotFoundException(`Usuário "${followingUsername}" não encontrado.`); }
 
     const isFollowing = follower.following.some(user => user.id === userToFollow.id);
-
     if (isFollowing) {
       follower.following = follower.following.filter(user => user.id !== userToFollow.id);
-      await this.usersRepository.save(follower);
-      return { following: false };
     } else {
       follower.following.push(userToFollow);
-      await this.usersRepository.save(follower);
       await this.notificationsService.createNotification({
-        recipient: userToFollow,
-        sender: follower,
-        type: NotificationType.NEW_FOLLOWER,
+        recipient: userToFollow, sender: follower, type: NotificationType.NEW_FOLLOWER,
       });
-      return { following: true };
     }
+    await this.usersRepository.save(follower);
+    return { following: !isFollowing };
   }
 }
