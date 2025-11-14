@@ -27,8 +27,8 @@ export class UploadService {
     return new Promise((resolve, reject) => {
       blobStream.on('error', (err) => reject(err));
       blobStream.on('finish', () => {
-        const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${destination}`;
-        resolve(publicUrl);
+        // Retorna apenas o caminho do arquivo, não a URL completa
+        resolve(destination);
       });
       blobStream.end(file.buffer);
     });
@@ -40,9 +40,13 @@ export class UploadService {
         return;
     }
     try {
+      // O fileName já é o caminho completo dentro do bucket
       await this.storage.bucket(this.bucketName).file(fileName).delete();
     } catch (error) {
-      console.error(`Falha ao deletar arquivo ${fileName} do GCS:`, error.message);
+      // Ignora o erro se o arquivo não for encontrado, pois pode já ter sido deletado
+      if (error.code !== 404) {
+        console.error(`Falha ao deletar arquivo ${fileName} do GCS:`, error.message);
+      }
     }
   }
 }

@@ -1,9 +1,9 @@
-import { Journey } from 'src/journeys/journey.entity';
+import { Journey } from '../journeys/journey.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, BeforeInsert, ManyToMany, JoinTable } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { Comment } from 'src/comments/comment.entity';
-import { Support } from 'src/supports/support.entity';
-import { Notification } from 'src/notifications/notification.entity';
+import { Comment } from '../comments/comment.entity';
+import { Support } from '../supports/support.entity';
+import { Notification } from '../notifications/notification.entity';
 
 @Entity('users')
 export class User {
@@ -37,7 +37,6 @@ export class User {
   @OneToMany(() => Notification, (notification) => notification.recipient)
   notifications: Notification[];
 
-  // CORREÇÃO: Removi a duplicação dos nomes de coluna para deixar o TypeORM gerenciá-los
   @ManyToMany(() => User, user => user.following)
   @JoinTable({ name: 'user_followers' })
   followers: User[];

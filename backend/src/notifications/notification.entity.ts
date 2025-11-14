@@ -1,5 +1,4 @@
-import { Proof } from 'src/proofs/proof.entity';
-import { User } from 'src/users/user.entity';
+import { User } from '../users/user.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
 
 export enum NotificationType {
@@ -20,7 +19,7 @@ export class Notification {
   @Column({ default: false })
   isRead: boolean;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.notifications, { onDelete: 'CASCADE' })
   recipient: User;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

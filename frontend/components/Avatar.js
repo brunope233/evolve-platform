@@ -2,11 +2,14 @@ import Image from 'next/image';
 import styles from '../styles/Avatar.module.css';
 
 const Avatar = ({ user, size = 40 }) => {
-  // Usamos a URL pública sempre
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '');
+  // A URL base para nossos arquivos públicos no Google Cloud Storage
+  // Esta variável de ambiente deve ser configurada na plataforma de deploy (Vercel/Firebase)
+  const baseUrl = process.env.NEXT_PUBLIC_GCS_URL;
 
   const hasAvatar = user && user.avatarUrl;
-  const avatarUrl = hasAvatar
+  
+  // Constrói a URL completa apenas se for um avatar do GCS, caso contrário usa o fallback local
+  const avatarUrl = (hasAvatar && baseUrl)
     ? `${baseUrl}/${user.avatarUrl}`
     : `/default-avatar.png`;
 
@@ -19,8 +22,7 @@ const Avatar = ({ user, size = 40 }) => {
         sizes={`${size}px`}
         className={styles.avatarImage}
         onError={(e) => { e.target.onerror = null; e.target.src = '/default-avatar.png' }}
-        // MUDANÇA: Se não for um avatar de usuário, não otimize.
-        unoptimized={!hasAvatar}
+        unoptimized={!hasAvatar} // Não otimiza a imagem de fallback local
       />
     </div>
   );

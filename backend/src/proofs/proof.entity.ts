@@ -1,8 +1,8 @@
-import { Journey } from 'src/journeys/journey.entity';
+import { Journey } from '../journeys/journey.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany } from 'typeorm';
-import { Comment } from 'src/comments/comment.entity';
-import { Support } from 'src/supports/support.entity';
-import { User } from 'src/users/user.entity';
+import { Comment } from '../comments/comment.entity';
+import { Support } from '../supports/support.entity';
+import { User } from '../users/user.entity';
 
 export enum ProofStatus {
   PROCESSING = 'PROCESSING',
