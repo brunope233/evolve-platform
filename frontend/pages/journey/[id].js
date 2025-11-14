@@ -20,7 +20,7 @@ export default function JourneyDetailPage({ initialJourney }) {
   const router = useRouter();
 
   // URL base para os arquivos de mídia no Google Cloud Storage
-  const BUCKET_BASE_URL = `https://storage.googleapis.com/${process.env.NEXT_PUBLIC_GCS_BUCKET_NAME}`;
+  const BUCKET_BASE_URL = 'https://storage.googleapis.com/evolve-platform-uploads-bruno';
 
   const fetchJourney = useCallback(async () => {
     if (!journey?.id) return;
