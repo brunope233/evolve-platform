@@ -1,13 +1,16 @@
 import Image from 'next/image';
 import styles from '../styles/Avatar.module.css';
 
-const Avatar = ({ user, size = 40 }) => {
-  // A URL base agora vem de uma variável de ambiente específica
-  const baseUrl = process.env.NEXT_PUBLIC_GCS_URL;
+// O nome do bucket é público e não precisa ser uma variável de ambiente.
+const BUCKET_BASE_URL = 'https://storage.googleapis.com/evolve-platform-uploads-bruno';
 
+const Avatar = ({ user, size = 40 }) => {
   const hasAvatar = user && user.avatarUrl;
+  
+  // Constrói a URL completa diretamente.
+  // O 'user.avatarUrl' já vem como 'avatars/...' do nosso backend.
   const avatarUrl = hasAvatar
-    ? `${baseUrl}/${user.avatarUrl}`
+    ? `${BUCKET_BASE_URL}/${user.avatarUrl}`
     : `/default-avatar.png`;
 
   return (
