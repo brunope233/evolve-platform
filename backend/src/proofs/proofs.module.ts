@@ -12,6 +12,7 @@ import { User } from 'src/users/user.entity';
 import { Comment } from 'src/comments/comment.entity';
 import { Support } from 'src/supports/support.entity';
 import { NotificationsModule } from 'src/notifications/notifications.module';
+import { UploadModule } from 'src/upload/upload.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
     EventsModule,
     HttpModule,
     NotificationsModule,
+    UploadModule,
   ],
   controllers: [ProofsController],
   providers: [ProofsService, JourneysService],

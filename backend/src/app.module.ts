@@ -17,7 +17,8 @@ import { HttpModule } from '@nestjs/axios';
 import { SupportsModule } from './supports/supports.module';
 import { SearchModule } from './search/search.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { FeedModule } from './feed/feed.module'; // IMPORTAR O MÓDULO QUE FALTAVA
+import { FeedModule } from './feed/feed.module';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -44,7 +45,8 @@ import { FeedModule } from './feed/feed.module'; // IMPORTAR O MÓDULO QUE FALTA
     SupportsModule,
     SearchModule,
     NotificationsModule,
-    FeedModule, // ADICIONAR O MÓDULO À LISTA
+    FeedModule,
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [AppService],

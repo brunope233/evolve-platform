@@ -1,12 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleOptions, TypeOrmOptionsFactory } from '@nestjs/typeorm';
-import { Comment } from 'src/comments/comment.entity';
-import { Journey } from 'src/journeys/journey.entity';
-import { Notification } from 'src/notifications/notification.entity';
-import { Proof } from 'src/proofs/proof.entity';
-import { Support } from 'src/supports/support.entity';
-import { User } from 'src/users/user.entity';
 
 @Injectable()
 export class DatabaseConfig implements TypeOrmOptionsFactory {
@@ -15,25 +9,27 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
   createTypeOrmOptions(): TypeOrmModuleOptions {
     const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
 
-    // O TypeORM precisa saber onde encontrar os arquivos de entidade compilados (.js) em produção.
+    // Em produção, o TypeORM precisa procurar por arquivos .js compilados, não .ts.
     const entitiesPath = isProduction 
       ? [__dirname + '/../**/*.entity.js'] 
       : [__dirname + '/../**/*.entity.ts'];
 
     if (isProduction) {
-      // Configuração para o Cloud SQL em produção
+      // Configuração para o Cloud SQL em produção (usando Unix Socket)
       return {
         type: 'postgres',
-        host: this.configService.get<string>('DB_HOST'), // Ex: /cloudsql/PROJECT:REGION:INSTANCE
+        // O 'host' para Unix Sockets é especificado no 'extra.socketPath'.
+        // O TypeORM ainda pode precisar de um valor placeholder aqui, mas não o usará para a conexão.
+        // host: 'localhost', 
         port: this.configService.get<number>('DB_PORT'),
         username: this.configService.get<string>('DB_USER'),
         password: this.configService.get<string>('DB_PASSWORD'),
         database: this.configService.get<string>('DB_NAME'),
         entities: entitiesPath,
-        synchronize: false, // Em produção, nunca sincronize automaticamente
-        ssl: true, // Adiciona SSL para segurança, pode ser necessário para Cloud SQL
+        synchronize: false, // NUNCA use true em produção
         extra: {
-          socketPath: this.configService.get<string>('DB_HOST'), // Usa Unix Socket para conectar
+          // O caminho do socket é o mesmo que passamos para a variável DB_HOST
+          socketPath: this.configService.get<string>('DB_HOST'),
         },
       };
     } else {
