@@ -13,7 +13,9 @@ export class UploadService {
   }
 
   async uploadFile(file: Express.Multer.File, destination: string): Promise<string> {
-    if (!this.bucketName) { throw new Error('GCS_BUCKET_NAME não configurado.'); }
+    if (!this.bucketName) {
+        throw new Error('GCS_BUCKET_NAME não está configurado.');
+    }
     const bucket = this.storage.bucket(this.bucketName);
     const blob = bucket.file(destination);
 
@@ -33,8 +35,12 @@ export class UploadService {
   }
 
   async deleteFile(fileName: string): Promise<void> {
-    if (!this.bucketName) { return; }
+    if (!this.bucketName) {
+        console.error('GCS_BUCKET_NAME não configurado, não é possível deletar o arquivo.');
+        return;
+    }
     try {
+      // O 'fileName' já é o caminho completo dentro do bucket (ex: 'avatars/...')
       await this.storage.bucket(this.bucketName).file(fileName).delete();
       console.log(`Arquivo ${fileName} deletado do GCS.`);
     } catch (error) {

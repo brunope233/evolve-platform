@@ -19,7 +19,8 @@ export default function JourneyDetailPage({ initialJourney }) {
   const { user, isLoggedIn } = useAuth();
   const router = useRouter();
 
-  const gcsBaseUrl = process.env.NEXT_PUBLIC_GCS_URL;
+  // URL base para os arquivos de mídia no Google Cloud Storage
+  const BUCKET_BASE_URL = `https://storage.googleapis.com/${process.env.NEXT_PUBLIC_GCS_BUCKET_NAME}`;
 
   const fetchJourney = useCallback(async () => {
     if (!journey?.id) return;
@@ -35,20 +36,25 @@ export default function JourneyDetailPage({ initialJourney }) {
   useEffect(() => {
     if (!journey) return;
     const socket = io(process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', ''));
+    
+    const newProofEvent = `journey:${journey.id}:proof_added`;
+    const proofRemovedEvent = `journey:${journey.id}:proof_removed`;
+
+    const refetchHandler = () => fetchJourney();
+
+    socket.on(newProofEvent, refetchHandler);
+    socket.on(proofRemovedEvent, refetchHandler);
+
     const allProofs = journey.proofs?.flatMap(p => [p, ...(p.assists || [])]) || [];
     const proofUpdateListeners = allProofs.map(proof => {
       const eventName = `proof:${proof.id}:updated`;
-      const handler = () => fetchJourney();
-      socket.on(eventName, handler);
-      return { eventName, handler };
+      socket.on(eventName, refetchHandler);
+      return { eventName, handler: refetchHandler };
     });
-    const newProofEvent = `journey:${journey.id}:proof_added`;
-    const proofRemovedEvent = `journey:${journey.id}:proof_removed`;
-    socket.on(newProofEvent, fetchJourney);
-    socket.on(proofRemovedEvent, fetchJourney);
+
     return () => {
-      socket.off(newProofEvent, fetchJourney);
-      socket.off(proofRemovedEvent, fetchJourney);
+      socket.off(newProofEvent, refetchHandler);
+      socket.off(proofRemovedEvent, refetchHandler);
       proofUpdateListeners.forEach(({ eventName, handler }) => socket.off(eventName, handler));
       socket.disconnect();
     };
@@ -67,6 +73,7 @@ export default function JourneyDetailPage({ initialJourney }) {
     if (assistingProofId) {
         setAssistingProofId(null);
     }
+    // A UI agora espera pelo evento do WebSocket para atualizar
   };
 
   const handleDeleteProof = async (proofId) => {
@@ -143,7 +150,13 @@ export default function JourneyDetailPage({ initialJourney }) {
                   {proof.status === 'PROCESSING' && ( <div className={styles.processingOverlay}><Spinner /><p>Processando...</p></div> )}
                   {proof.status === 'FAILED' && ( <div className={styles.processingOverlay}><span className={styles.errorIcon}>⚠️</span><p>Falha no processamento</p></div> )}
                   {proof.status === 'READY' && (
-                    <video key={proof.thumbnailUrl} className={styles.videoPlayer} controls poster={proof.thumbnailUrl ? `${gcsBaseUrl}/${proof.thumbnailUrl}` : ''} src={`${gcsBaseUrl}/${proof.originalVideoUrl}`}>
+                    <video 
+                      key={proof.thumbnailUrl} 
+                      className={styles.videoPlayer} 
+                      controls 
+                      poster={proof.thumbnailUrl ? `${BUCKET_BASE_URL}/${proof.thumbnailUrl}` : ''} 
+                      src={`${BUCKET_BASE_URL}/${proof.originalVideoUrl}`}
+                    >
                       Seu navegador não suporta vídeos.
                     </video>
                   )}
@@ -200,7 +213,6 @@ export async function getServerSideProps(context) {
     const res = await api.get(`/journeys/${id}`, config);
     return { props: { initialJourney: res.data } };
   } catch (error) {
-    console.error(`ERRO NO GETSERVERSIDEPROPS:`, error.message);
     return { props: { initialJourney: null } };
   }
 }
