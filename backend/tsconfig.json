@@ -17,7 +17,15 @@
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
-    "esModuleInterop": true, 
-    "typeRoots": ["./node_modules/@types"] 
-  }
+    "esModuleInterop": true,
+    "typeRoots": ["./node_modules/@types"],
+    "rootDir": "./src"
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
