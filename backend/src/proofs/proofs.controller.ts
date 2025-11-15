@@ -3,8 +3,6 @@ import { AuthGuard } from '@nestjs/passport';
 import { ProofsService } from './proofs.service';
 import { CreateProofDto } from './dto/create-proof.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
 import { ProofStatus } from './proof.entity';
 
 @Controller('proofs')
@@ -14,7 +12,7 @@ export class ProofsController {
   @Post('upload')
   @UseGuards(AuthGuard('jwt'))
   @UseInterceptors(FileInterceptor('video', {
-    limits: { fileSize: 1024 * 1024 * 100 }, // 100MB
+    limits: { fileSize: 1024 * 1024 * 100 },
     fileFilter: (req, file, callback) => {
         if (!file.mimetype.startsWith('video/')) {
             return callback(new BadRequestException('Apenas arquivos de vídeo são permitidos!'), false);
@@ -31,7 +29,6 @@ export class ProofsController {
       throw new BadRequestException('Nenhum arquivo de vídeo recebido!');
     }
 
-    // Validação Manual para lidar com FormData
     const createProofDto = new CreateProofDto();
     createProofDto.journeyId = body.journeyId;
     createProofDto.title = body.title;
@@ -67,8 +64,8 @@ export class ProofsController {
   @Patch(':id/processed')
   updateProofStatus(
     @Param('id') id: string,
-    @Body() body: { status: ProofStatus, thumbnailUrl?: string }
+    @Body() body: { status: ProofStatus, thumbnailUrl?: string, suggestedTags?: string[] }
   ) {
-    return this.proofsService.updateProofStatus(id, body.status, body.thumbnailUrl);
+    return this.proofsService.updateProofStatus(id, body.status, body.thumbnailUrl, body.suggestedTags);
   }
 }

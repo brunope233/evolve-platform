@@ -24,7 +24,7 @@ export class ProofsService {
     private readonly httpService: HttpService,
     private readonly notificationsService: NotificationsService,
     private readonly uploadService: UploadService,
-    private readonly configService: ConfigService, // Adicionar ConfigService
+    private readonly configService: ConfigService,
   ) {}
 
   async create(createProofDto: CreateProofDto, user: User, file: Express.Multer.File): Promise<Proof> {
@@ -62,8 +62,6 @@ export class ProofsService {
             ? this.configService.get<string>('VIDEO_PROCESSOR_URL')
             : 'http://video-processor:3002';
         
-        console.log(`Disparando job para: ${videoProcessorUrl}`);
-        
         await firstValueFrom(
             this.httpService.post(`${videoProcessorUrl}/process`, {
                 proofId: savedProof.id,
@@ -80,14 +78,29 @@ export class ProofsService {
     return savedProof;
   }
   
-  async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string): Promise<void> {
-    const proof = await this.proofsRepository.findOne({ where: { id: proofId }, relations: ['journey', 'user', 'comments', 'supports', 'assists', 'parentProof'] });
+  async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string, suggestedTags?: string[]): Promise<void> {
+    const proof = await this.proofsRepository.findOne({
+        where: { id: proofId },
+        relations: ['user', 'journey'],
+    });
     if (!proof) { throw new NotFoundException(`Proof com ID "${proofId}" não encontrada.`); }
 
     proof.status = status;
     if (thumbnailUrl) { proof.thumbnailUrl = thumbnailUrl; }
     
     const updatedProof = await this.proofsRepository.save(proof);
+    
+    if (suggestedTags && suggestedTags.length > 0) {
+      await this.notificationsService.createNotification({
+          recipient: proof.user,
+          type: NotificationType.TAG_SUGGESTION,
+          journeyId: proof.journey.id,
+          proofId: proof.id,
+          suggestedTags: suggestedTags,
+          // sender é nulo aqui, pois é uma notificação do sistema
+      });
+    }
+
     this.eventsGateway.server.emit(`proof:${proofId}:updated`, updatedProof);
   }
 
