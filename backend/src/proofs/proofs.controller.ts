@@ -1,8 +1,10 @@
-import { Controller, Post, Body, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, Delete, Param, Patch } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException, Delete, Param, Patch, ValidationPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ProofsService } from './proofs.service';
 import { CreateProofDto } from './dto/create-proof.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { ProofStatus } from './proof.entity';
 
 @Controller('proofs')
@@ -20,15 +22,30 @@ export class ProofsController {
         callback(null, true);
     },
   }))
-  uploadFile(
+  async uploadFile(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: CreateProofDto,
+    @Body() body: any,
     @Request() req,
   ) {
     if (!file) {
-      throw new BadRequestException('Nenhum arquivo recebido pelo controller!');
+      throw new BadRequestException('Nenhum arquivo de vídeo recebido!');
     }
-    return this.proofsService.create(body, req.user, file);
+
+    // Validação Manual para lidar com FormData
+    const createProofDto = new CreateProofDto();
+    createProofDto.journeyId = body.journeyId;
+    createProofDto.title = body.title;
+    createProofDto.description = body.description;
+    createProofDto.parentProofId = body.parentProofId;
+    createProofDto.requestRealTimeSeal = body.requestRealTimeSeal === 'true';
+
+    const validationPipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
+    try {
+      const validatedDto = await validationPipe.transform(createProofDto, { type: 'body', metatype: CreateProofDto });
+      return this.proofsService.create(validatedDto, req.user, file);
+    } catch (e) {
+      throw new BadRequestException(e.message);
+    }
   }
 
   @Delete(':id')

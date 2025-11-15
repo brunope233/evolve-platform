@@ -5,22 +5,21 @@ import { useAuth } from '../../context/AuthContext';
 import withAuth from '../../components/withAuth';
 import styles from '../../styles/EditProfile.module.css';
 import toast from 'react-hot-toast';
-import Avatar from '../../components/Avatar'; // Importar Avatar
+import Avatar from '../../components/Avatar';
 
 function EditProfilePage() {
   const [bio, setBio] = useState('');
-  const [userProfile, setUserProfile] = useState(null); // Estado para o perfil completo
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const router = useRouter();
 
-  // Busca os dados atuais do perfil quando a página carrega
   useEffect(() => {
-    if (user) {
+    if (user && user.username) {
       api.get(`/users/profile/${user.username}`)
         .then(res => {
           setBio(res.data.bio || '');
-          setUserProfile(res.data); // Salva o perfil completo
+          setUserProfile(res.data);
           setLoading(false);
         })
         .catch(err => {
@@ -40,13 +39,12 @@ function EditProfilePage() {
     });
     try {
       await promise;
-      router.push(`/profile/${user.username}`);
+      setTimeout(() => router.push(`/profile/${user.username}`), 1000);
     } catch (error) {
       console.error('Falha ao atualizar o perfil:', error);
     }
   };
 
-  // Nova função para upload do avatar
   const handleAvatarUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -57,19 +55,19 @@ function EditProfilePage() {
     const promise = api.post('/users/profile/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-
+    
     toast.promise(promise, {
         loading: 'Enviando novo avatar...',
-        success: 'Avatar atualizado com sucesso!',
+        success: 'Avatar atualizado! Recarregando...',
         error: 'Não foi possível atualizar o avatar.'
     });
 
     try {
-        const res = await promise;
-        // Atualiza o estado local para a UI refletir a mudança
-        setUserProfile(res.data);
+        await promise;
+        // Força um recarregamento completo da página para buscar a nova URL do avatar
+        router.reload();
     } catch (error) {
-        console.error(error);
+        console.error("Falha no upload do avatar:", error);
     }
   };
 
@@ -103,6 +101,7 @@ function EditProfilePage() {
             className={styles.textarea}
             value={bio}
             onChange={(e) => setBio(e.target.value)}
+            placeholder="Conte um pouco sobre você e suas jornadas..."
             rows="5"
           ></textarea>
         </div>
