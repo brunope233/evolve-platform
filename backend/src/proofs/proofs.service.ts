@@ -12,6 +12,7 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationType } from 'src/notifications/notification.entity';
 import { UploadService } from 'src/upload/upload.service';
 import { extname } from 'path';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ProofsService {
@@ -23,6 +24,7 @@ export class ProofsService {
     private readonly httpService: HttpService,
     private readonly notificationsService: NotificationsService,
     private readonly uploadService: UploadService,
+    private readonly configService: ConfigService, // Adicionar ConfigService
   ) {}
 
   async create(createProofDto: CreateProofDto, user: User, file: Express.Multer.File): Promise<Proof> {
@@ -40,15 +42,12 @@ export class ProofsService {
     const proofData: Partial<Proof> = {
       title, description, journey, user,
       hasRealTimeSeal: !!requestRealTimeSeal,
-      originalVideoUrl: destination, // Salva apenas o caminho relativo
+      originalVideoUrl: destination,
       status: ProofStatus.PROCESSING,
     };
     
     if (parentProofId) {
-        const parentProof = await this.proofsRepository.findOne({
-            where: { id: parentProofId },
-            relations: ['journey', 'journey.user']
-        });
+        const parentProof = await this.proofsRepository.findOne({ where: { id: parentProofId }, relations: ['journey', 'journey.user'] });
         if (!parentProof) { throw new NotFoundException('Prova original não encontrada.'); }
         if (parentProof.journey.user.id === user.id) { throw new ForbiddenException('Você não pode responder à sua própria prova.'); }
         proofData.parentProof = parentProof;
@@ -58,29 +57,32 @@ export class ProofsService {
     const savedProof = await this.proofsRepository.save(newProof);
     
     try {
+        const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+        const videoProcessorUrl = isProduction
+            ? this.configService.get<string>('VIDEO_PROCESSOR_URL')
+            : 'http://video-processor:3002';
+        
+        console.log(`Disparando job para: ${videoProcessorUrl}`);
+        
         await firstValueFrom(
-            this.httpService.post('http://video-processor:3002/process', {
+            this.httpService.post(`${videoProcessorUrl}/process`, {
                 proofId: savedProof.id,
-                videoFileName: destination, // Envia o caminho relativo
+                videoFileName: destination,
             })
         );
-    } catch (error) { console.error("Falha ao disparar job para o video-processor:", error.message); }
+    } catch (error) {
+        console.error("Falha ao disparar job para o video-processor:", error.message);
+    }
 
-    const fullProofForSocket = await this.proofsRepository.findOne({
-        where: { id: savedProof.id },
-        relations: ['parentProof', 'user'],
-    });
+    const fullProofForSocket = await this.proofsRepository.findOne({ where: { id: savedProof.id }, relations: ['parentProof', 'user'] });
     this.eventsGateway.server.emit(`journey:${journeyId}:proof_added`, fullProofForSocket);
     
     return savedProof;
   }
   
   async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string): Promise<void> {
-    const proof = await this.proofsRepository.findOne({
-        where: { id: proofId },
-        relations: ['journey', 'user', 'comments', 'supports', 'assists', 'parentProof'],
-    });
-    if (!proof) { throw new NotFoundException(`Proof with ID "${proofId}" não encontrada.`); }
+    const proof = await this.proofsRepository.findOne({ where: { id: proofId }, relations: ['journey', 'user', 'comments', 'supports', 'assists', 'parentProof'] });
+    if (!proof) { throw new NotFoundException(`Proof com ID "${proofId}" não encontrada.`); }
 
     proof.status = status;
     if (thumbnailUrl) { proof.thumbnailUrl = thumbnailUrl; }
@@ -106,11 +108,7 @@ export class ProofsService {
   }
 
   async markAsBestAssist(parentProofId: string, assistId: string, user: User): Promise<Proof> {
-    const parentProof = await this.proofsRepository.findOne({
-      where: { id: parentProofId },
-      relations: ['journey', 'journey.user', 'assists', 'comments', 'supports'],
-    });
-
+    const parentProof = await this.proofsRepository.findOne({ where: { id: parentProofId }, relations: ['journey', 'journey.user', 'assists', 'comments', 'supports'] });
     if (!parentProof) { throw new NotFoundException('O pedido de ajuda original não foi encontrado.'); }
     if (parentProof.journey.user.id !== user.id) { throw new ForbiddenException('Apenas o autor pode marcar a melhor resposta.'); }
 

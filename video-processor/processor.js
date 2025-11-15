@@ -9,6 +9,7 @@ const storage = new Storage();
 const bucketName = process.env.GCS_BUCKET_NAME;
 
 const api = axios.create({
+    // A API_URL_INTERNAL virá das variáveis de ambiente do Cloud Run
     baseURL: process.env.API_URL_INTERNAL || 'http://backend:3001/api/v1',
 });
 
@@ -37,6 +38,7 @@ const processVideo = async (proofId, videoFilePath) => {
         });
         console.log(`✅ Thumbnail gerada: ${tempOutputPath}`);
 
+        // O caminho final da thumbnail no bucket
         const destination = `proofs/thumbnails/${thumbnailFileName}`;
         await bucket.upload(tempOutputPath, {
             destination: destination,
@@ -46,7 +48,7 @@ const processVideo = async (proofId, videoFilePath) => {
         console.log(`Atualizando status da prova ${proofId}.`);
         await api.patch(`/proofs/${proofId}/processed`, {
             status: 'READY',
-            thumbnailUrl: destination, // Envia o caminho relativo
+            thumbnailUrl: destination, // Envia o caminho relativo (ex: 'proofs/thumbnails/...')
         });
 
     } catch (error) {
