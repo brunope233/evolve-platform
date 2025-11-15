@@ -7,17 +7,35 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
   constructor(private configService: ConfigService) {}
 
   createTypeOrmOptions(): TypeOrmModuleOptions {
-    // Para a sincronização, vamos ler as variáveis do .env
-    return {
-      type: 'postgres',
-      host: '127.0.0.1',
-      port: 5432,
-      username: 'postgres', 
-      password: 'Rg9""2Kza)7AzD;g',
-      database: 'evolve-db',
-      entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-      synchronize: true,
-      ssl: false,
-    };
+    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    const entitiesPath = isProduction 
+      ? [__dirname + '/../**/*.entity.js'] 
+      : [__dirname + '/../**/*.entity.ts'];
+
+    if (isProduction) {
+      // Configuração para o Cloud SQL em produção (usando IP Privado via VPC Connector)
+      return {
+        type: 'postgres',
+        host: this.configService.get<string>('DB_HOST_PRIVATE'),
+        port: 5432,
+        username: this.configService.get<string>('DB_USER'),
+        password: this.configService.get<string>('DB_PASSWORD'),
+        database: this.configService.get<string>('DB_NAME'),
+        entities: entitiesPath,
+        synchronize: false,
+      };
+    } else {
+      // Configuração para o Docker em desenvolvimento
+      return {
+        type: 'postgres',
+        host: this.configService.get<string>('DB_HOST'),
+        port: 5432,
+        username: this.configService.get<string>('DB_USER'),
+        password: this.configService.get<string>('DB_PASSWORD'),
+        database: this.configService.get<string>('DB_NAME'),
+        entities: entitiesPath,
+        synchronize: true,
+      };
+    }
   }
 }
