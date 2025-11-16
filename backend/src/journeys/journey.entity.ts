@@ -1,5 +1,5 @@
-import { Proof } from 'src/proofs/proof.entity';
-import { User } from 'src/users/user.entity';
+import { Proof } from '../proofs/proof.entity';
+import { User } from '../users/user.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany } from 'typeorm';
 
 export enum JourneyStatus {
@@ -29,7 +29,7 @@ export class Journey {
   @Column('text', { array: true, nullable: true })
   tags: string[];
 
-  @ManyToOne(() => User, (user) => user.journeys, { eager: true })
+  @ManyToOne(() => User, (user) => user.journeys)
   user: User;
 
   @OneToMany(() => Proof, (proof) => proof.journey, { cascade: true })

@@ -8,6 +8,7 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
 
   createTypeOrmOptions(): TypeOrmModuleOptions {
     const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+
     const entitiesPath = isProduction 
       ? [__dirname + '/../**/*.entity.js'] 
       : [__dirname + '/../**/*.entity.ts'];
@@ -18,11 +19,12 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
         type: 'postgres',
         host: this.configService.get<string>('DB_HOST_PRIVATE'),
         port: 5432,
-        username: this.configService.get<string>('DB_USER'),
+        username: this.configService.get<string> 'DB_USER'),
         password: this.configService.get<string>('DB_PASSWORD'),
         database: this.configService.get<string>('DB_NAME'),
         entities: entitiesPath,
         synchronize: false,
+        ssl: false,
       };
     } else {
       // Configuração para o Docker em desenvolvimento
