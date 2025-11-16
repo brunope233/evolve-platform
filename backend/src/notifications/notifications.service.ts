@@ -13,33 +13,44 @@ export class NotificationsService {
     private readonly eventsGateway: EventsGateway,
   ) {}
 
-  // Função principal para criar notificações
-  async createNotification(data: { recipient: User; sender: User; type: NotificationType; journeyId?: string; proofId?: string; }) {
-  if (data.recipient.id === data.sender.id) { return; }
+  async createNotification(data: {
+    recipient: User;
+    sender?: User;
+    type: NotificationType;
+    journeyId?: string;
+    proofId?: string;
+    suggestedTags?: string[];
+  }) {
+    // Não notifica o usuário por suas próprias ações
+    if (data.sender && data.recipient.id === data.sender.id) {
+      return;
+    }
 
-  const notification = this.notificationsRepository.create(data);
-  const savedNotification = await this.notificationsRepository.save(notification);
+    const notification = this.notificationsRepository.create(data);
+    const savedNotification = await this.notificationsRepository.save(notification);
 
-  const fullNotification = await this.notificationsRepository.findOne({
-    where: { id: savedNotification.id },
-    relations: ['sender'],
-  });
+    // Busca a notificação completa com a relação 'sender' para enviar via WebSocket
+    const fullNotification = await this.notificationsRepository.findOne({
+      where: { id: savedNotification.id },
+      relations: ['sender'],
+    });
 
-  // Criamos um payload customizado para o WebSocket
-  const payload = {
-      ...fullNotification,
-      recipientId: data.recipient.id, // Adiciona o ID do destinatário
-  };
+    // Cria um payload customizado para o WebSocket, incluindo o ID do destinatário
+    const payload = {
+        ...fullNotification,
+        recipientId: data.recipient.id,
+    };
 
-  this.eventsGateway.server.emit('new_notification', payload);
-}
+    // Emite o evento para todos, e o cliente decide se a notificação é para ele
+    this.eventsGateway.server.emit('new_notification', payload);
+  }
 
   async getNotificationsForUser(userId: string): Promise<Notification[]> {
     return this.notificationsRepository.find({
       where: { recipient: { id: userId } },
       relations: ['sender'],
       order: { createdAt: 'DESC' },
-      take: 20, // Limita a 20 notificações
+      take: 20,
     });
   }
 
@@ -50,4 +61,4 @@ export class NotificationsService {
     );
     return { success: true };
   }
-} 
+}
