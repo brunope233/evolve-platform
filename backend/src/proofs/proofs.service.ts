@@ -62,6 +62,8 @@ export class ProofsService {
             ? this.configService.get<string>('VIDEO_PROCESSOR_URL')
             : 'http://video-processor:3002';
         
+        console.log(`Disparando job para: ${videoProcessorUrl}`);
+        
         await firstValueFrom(
             this.httpService.post(`${videoProcessorUrl}/process`, {
                 proofId: savedProof.id,
@@ -81,12 +83,20 @@ export class ProofsService {
   async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string, suggestedTags?: string[]): Promise<void> {
     const proof = await this.proofsRepository.findOne({
         where: { id: proofId },
-        relations: ['user', 'journey'],
+        relations: {
+            user: true,
+            journey: true,
+        },
     });
-    if (!proof) { throw new NotFoundException(`Proof com ID "${proofId}" não encontrada.`); }
+    
+    if (!proof) {
+        throw new NotFoundException(`Proof with ID "${proofId}" não encontrada.`);
+    }
 
     proof.status = status;
-    if (thumbnailUrl) { proof.thumbnailUrl = thumbnailUrl; }
+    if (thumbnailUrl) {
+      proof.thumbnailUrl = thumbnailUrl;
+    }
     
     const updatedProof = await this.proofsRepository.save(proof);
     
@@ -97,7 +107,6 @@ export class ProofsService {
           journeyId: proof.journey.id,
           proofId: proof.id,
           suggestedTags: suggestedTags,
-          // sender é nulo aqui, pois é uma notificação do sistema
       });
     }
 
