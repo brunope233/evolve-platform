@@ -20,15 +20,8 @@ export class ProofsController {
         callback(null, true);
     },
   }))
-  async uploadFile(
-    @UploadedFile() file: Express.Multer.File,
-    @Body() body: any,
-    @Request() req,
-  ) {
-    if (!file) {
-      throw new BadRequestException('Nenhum arquivo de vídeo recebido!');
-    }
-
+  async uploadFile(@UploadedFile() file: Express.Multer.File, @Body() body: any, @Request() req) {
+    if (!file) { throw new BadRequestException('Nenhum arquivo de vídeo recebido!'); }
     const createProofDto = new CreateProofDto();
     createProofDto.journeyId = body.journeyId;
     createProofDto.title = body.title;
@@ -53,19 +46,12 @@ export class ProofsController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post(':parentProofId/mark-best/:assistId')
-  markAsBestAssist(
-    @Param('parentProofId') parentProofId: string,
-    @Param('assistId') assistId: string,
-    @Request() req,
-  ) {
+  markAsBestAssist(@Param('parentProofId') parentProofId: string, @Param('assistId') assistId: string, @Request() req) {
     return this.proofsService.markAsBestAssist(parentProofId, assistId, req.user);
   }
 
   @Patch(':id/processed')
-  updateProofStatus(
-    @Param('id') id: string,
-    @Body() body: { status: ProofStatus, thumbnailUrl?: string, suggestedTags?: string[] }
-  ) {
-    return this.proofsService.updateProofStatus(id, body.status, body.thumbnailUrl, body.suggestedTags);
+  updateProofStatus(@Param('id') id: string, @Body() body: { status: ProofStatus, thumbnailUrl?: string, suggestedTags?: string[], aiLabels?: string[] }) {
+    return this.proofsService.updateProofStatus(id, body.status, body.thumbnailUrl, body.suggestedTags, body.aiLabels);
   }
 }

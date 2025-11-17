@@ -36,6 +36,9 @@ export class Proof {
   @Column({ default: false })
   hasRealTimeSeal: boolean;
 
+  @Column('text', { array: true, nullable: true })
+  aiLabels: string[];
+
   @ManyToOne(() => Proof, proof => proof.assists, { nullable: true, onDelete: 'SET NULL' })
   parentProof: Proof;
 

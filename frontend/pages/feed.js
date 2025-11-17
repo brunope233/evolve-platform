@@ -10,62 +10,99 @@ function FeedPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('following'); // 'following' ou 'for-you'
 
-  const { ref, inView } = useInView(); // Hook para detectar a visibilidade
+  const { ref, inView } = useInView({ threshold: 0 });
 
-  // Função para buscar mais provas
-  const loadMoreProofs = async () => {
-    if (!hasMore) return;
-    
-    const res = await api.get(`/feed?page=${page}`);
-    const newProofs = res.data;
+  const fetchProofs = async (tab, currentPage, currentProofs) => {
+    setLoading(true);
+    try {
+      const endpoint = tab === 'following' ? '/feed' : '/feed/for-you';
+      const res = await api.get(`${endpoint}?page=${currentPage}`);
+      const newProofs = res.data;
 
-    if (newProofs.length === 0) {
-      setHasMore(false);
-    } else {
-      setProofs((prevProofs) => [...prevProofs, ...newProofs]);
-      setPage((prevPage) => prevPage + 1);
+      if (newProofs.length === 0) {
+        setHasMore(false);
+      } else {
+        setProofs([...currentProofs, ...newProofs]);
+        setPage(currentPage + 1);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar feed:", error);
+    } finally {
+      setLoading(false);
     }
   };
-  
-  // Carrega as provas iniciais
+
+  // Reseta e busca os dados quando a aba muda
   useEffect(() => {
+    setProofs([]);
+    setPage(1);
+    setHasMore(true);
     setLoading(true);
-    api.get('/feed?page=1').then(res => {
-        setProofs(res.data);
-        setPage(2);
-        if (res.data.length < 10) setHasMore(false);
-        setLoading(false);
-    });
-  }, []);
+    fetchProofs(activeTab, 1, []);
+  }, [activeTab]);
 
   // Carrega mais provas quando o elemento 'ref' se torna visível
   useEffect(() => {
-    if (inView) {
-      loadMoreProofs();
+    if (inView && !loading) {
+      fetchProofs(activeTab, page, proofs);
     }
-  }, [inView]);
+  }, [inView, loading]);
 
-  return (
-    <div className={styles.feedContainer}>
-      <h1 className={styles.title}>Seu Feed</h1>
-      {loading && proofs.length === 0 ? (
-        <p>Carregando feed...</p>
-      ) : proofs.length > 0 ? (
+  const renderContent = () => {
+    if (loading && proofs.length === 0) {
+      return <p>Carregando feed...</p>;
+    }
+
+    if (proofs.length > 0) {
+      return (
         <div className={styles.proofsList}>
           {proofs.map(proof => (
-            <ProofCard key={proof.id} proof={proof} />
+            <ProofCard key={`${activeTab}-${proof.id}`} proof={proof} />
           ))}
           {hasMore && <div ref={ref}>Carregando mais...</div>}
         </div>
-      ) : (
+      );
+    }
+
+    if (activeTab === 'following') {
+      return (
         <div className={styles.emptyFeed}>
-            <h2>Seu feed está vazio!</h2>
-            <p>Siga outros usuários para ver as provas deles aqui.</p>
+          <h2>Seu feed "Seguindo" está vazio!</h2>
+          <p>Siga outros usuários para ver as provas deles aqui.</p>
         </div>
-      )}
+      );
+    } else {
+      return (
+        <div className={styles.emptyFeed}>
+          <h2>Seu feed "Para Você" está vazio!</h2>
+          <p>Interaja com provas (dando "apoios") para que possamos aprender sobre seus interesses e recomendar conteúdo.</p>
+        </div>
+      );
+    }
+  };
+
+  return (
+    <div className={styles.feedContainer}>
+      <div className={styles.tabContainer}>
+        <button 
+          className={`${styles.tabButton} ${activeTab === 'following' ? styles.active : ''}`}
+          onClick={() => setActiveTab('following')}
+        >
+          Seguindo
+        </button>
+        <button 
+          className={`${styles.tabButton} ${activeTab === 'for-you' ? styles.active : ''}`}
+          onClick={() => setActiveTab('for-you')}
+        >
+          Para Você
+        </button>
+      </div>
+      
+      {renderContent()}
     </div>
   );
 }
 
-export default withAuth(FeedPage); // Protege a página
+export default withAuth(FeedPage);

@@ -62,17 +62,13 @@ export class ProofsService {
             ? this.configService.get<string>('VIDEO_PROCESSOR_URL')
             : 'http://video-processor:3002';
         
-        console.log(`Disparando job para: ${videoProcessorUrl}`);
-        
         await firstValueFrom(
             this.httpService.post(`${videoProcessorUrl}/process`, {
                 proofId: savedProof.id,
                 videoFileName: destination,
             })
         );
-    } catch (error) {
-        console.error("Falha ao disparar job para o video-processor:", error.message);
-    }
+    } catch (error) { console.error("Falha ao disparar job:", error.message); }
 
     const fullProofForSocket = await this.proofsRepository.findOne({ where: { id: savedProof.id }, relations: ['parentProof', 'user'] });
     this.eventsGateway.server.emit(`journey:${journeyId}:proof_added`, fullProofForSocket);
@@ -80,23 +76,17 @@ export class ProofsService {
     return savedProof;
   }
   
-  async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string, suggestedTags?: string[]): Promise<void> {
+  async updateProofStatus(proofId: string, status: ProofStatus, thumbnailUrl?: string, suggestedTags?: string[], aiLabels?: string[]): Promise<void> {
     const proof = await this.proofsRepository.findOne({
         where: { id: proofId },
-        relations: {
-            user: true,
-            journey: true,
-        },
+        relations: { user: true, journey: true },
     });
     
-    if (!proof) {
-        throw new NotFoundException(`Proof with ID "${proofId}" não encontrada.`);
-    }
+    if (!proof) { throw new NotFoundException(`Proof com ID "${proofId}" não encontrada.`); }
 
     proof.status = status;
-    if (thumbnailUrl) {
-      proof.thumbnailUrl = thumbnailUrl;
-    }
+    if (thumbnailUrl) { proof.thumbnailUrl = thumbnailUrl; }
+    if (aiLabels) { proof.aiLabels = aiLabels; }
     
     const updatedProof = await this.proofsRepository.save(proof);
     
@@ -118,12 +108,8 @@ export class ProofsService {
     if (!proof) { throw new NotFoundException(`Prova com ID "${proofId}" não encontrada.`); }
     if (proof.user.id !== user.id) { throw new ForbiddenException('Você não tem permissão para deletar esta prova.'); }
 
-    if (proof.originalVideoUrl) {
-        await this.uploadService.deleteFile(proof.originalVideoUrl);
-    }
-    if (proof.thumbnailUrl) {
-        await this.uploadService.deleteFile(proof.thumbnailUrl);
-    }
+    if (proof.originalVideoUrl) { await this.uploadService.deleteFile(proof.originalVideoUrl); }
+    if (proof.thumbnailUrl) { await this.uploadService.deleteFile(proof.thumbnailUrl); }
 
     await this.proofsRepository.delete(proofId);
     this.eventsGateway.server.emit(`journey:${proof.journey.id}:proof_removed`, { proofId });
@@ -144,11 +130,8 @@ export class ProofsService {
     const updatedParentProof = await this.proofsRepository.save(parentProof);
 
     await this.notificationsService.createNotification({
-        recipient: assistProof.user,
-        sender: user,
-        type: NotificationType.BEST_ASSIST,
-        journeyId: parentProof.journey.id,
-        proofId: parentProof.id,
+        recipient: assistProof.user, sender: user, type: NotificationType.BEST_ASSIST,
+        journeyId: parentProof.journey.id, proofId: parentProof.id,
     });
     
     this.eventsGateway.server.emit(`proof:${parentProofId}:updated`, updatedParentProof);
