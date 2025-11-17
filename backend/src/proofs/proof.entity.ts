@@ -36,6 +36,7 @@ export class Proof {
   @Column({ default: false })
   hasRealTimeSeal: boolean;
 
+  // RÓTULOS DA IA
   @Column('text', { array: true, nullable: true })
   aiLabels: string[];
 
