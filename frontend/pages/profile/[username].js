@@ -26,8 +26,8 @@ export default function ProfilePage({ userProfile: initialProfile }) {
     setUserProfile(prevProfile => ({
       ...prevProfile,
       followerCount: isNowFollowing 
-        ? prevProfile.followerCount + 1 
-        : prevProfile.followerCount - 1,
+        ? (prevProfile.followerCount || 0) + 1 
+        : (prevProfile.followerCount || 1) - 1,
       isFollowing: isNowFollowing,
     }));
   };
@@ -40,8 +40,8 @@ export default function ProfilePage({ userProfile: initialProfile }) {
         
         <div className={styles.statsContainer}>
           <span><strong>{userProfile.journeys?.length || 0}</strong> Jornadas</span>
-          <span><strong>{userProfile.followerCount}</strong> Seguidores</span>
-          <span><strong>{userProfile.followingCount}</strong> Seguindo</span>
+          <span><strong>{userProfile.followerCount || 0}</strong> Seguidores</span>
+          <span><strong>{userProfile.followingCount || 0}</strong> Seguindo</span>
         </div>
 
         <p className={styles.bio}>{userProfile.bio || 'Este usuário ainda não adicionou uma bio.'}</p>
@@ -79,24 +79,14 @@ export default function ProfilePage({ userProfile: initialProfile }) {
 export async function getServerSideProps(context) {
   try {
     const { username } = context.params;
-    const { req } = context; // Pega o objeto de requisição do servidor
-
-    // Pega o token JWT dos cookies que foram enviados pelo navegador
-    const token = req.cookies.token; 
-
-    // Monta a configuração da requisição
-    const config = {};
-    if (token) {
-      // Se o token existir, o adiciona ao cabeçalho de Autorização
-      config.headers = { Authorization: `Bearer ${token}` };
-    }
+    const { req } = context;
     
-    // Faz a chamada para a API, enviando a configuração com o token
+    const token = req.cookies.token;
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    
     const res = await api.get(`/users/profile/${username}`, config);
     
-    return {
-      props: { userProfile: res.data },
-    };
+    return { props: { userProfile: res.data } };
   } catch (error) {
     console.error(`Failed to fetch profile for ${context.params.username}:`, error.message);
     return { props: { userProfile: null } };

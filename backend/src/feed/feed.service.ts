@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Proof } from 'src/proofs/proof.entity';
 import { Support } from 'src/supports/support.entity';
 import { User } from 'src/users/user.entity';
-import { In, Not, Repository, ArrayContains } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 
 @Injectable()
 export class FeedService {
@@ -30,9 +30,11 @@ export class FeedService {
     
     const proofs = await this.proofsRepository.find({
       where: {
-        parentProof: In([null]),
+        parentProof: In([null]), 
         journey: {
-          user: { id: In(followingIds) },
+          user: {
+            id: In(followingIds),
+          },
         },
       },
       relations: {
@@ -52,40 +54,39 @@ export class FeedService {
   async getForYouFeed(userId: string, page: number = 1, limit: number = 10): Promise<Proof[]> {
     const userSupports = await this.supportsRepository.find({
         where: { user: { id: userId } },
-        relations: ['proof'],
-        take: 50, // Analisa os últimos 50 apoios
+        relations: ['proof', 'proof.aiLabels'], // Carrega os rótulos da IA da prova
+        take: 50,
     });
 
-    const interestLabels = userSupports.flatMap(support => support.proof.aiLabels || []);
+    const interestLabels = userSupports.flatMap(support => support.proof?.aiLabels || []);
     if (interestLabels.length === 0) return [];
 
     const labelCounts = interestLabels.reduce((acc, label) => {
         acc[label] = (acc[label] || 0) + 1;
         return acc;
     }, {});
+
     const topLabels = Object.keys(labelCounts).sort((a, b) => labelCounts[b] - labelCounts[a]).slice(0, 5);
     
     const user = await this.usersRepository.findOne({ where: {id: userId}, relations: ['following']});
     const followingIds = user.following.map(u => u.id);
     const usersToExclude = [userId, ...followingIds];
 
-    const recommendedProofs = await this.proofsRepository.find({
-        where: {
-            parentProof: In([null]),
-            user: { id: Not(In(usersToExclude)) },
-            aiLabels: ArrayContains(topLabels)
-        },
-        relations: {
-            journey: { user: true },
-            user: true,
-            supports: { user: true },
-            comments: { user: true },
-        },
-        order: { createdAt: 'DESC' },
-        skip: (page - 1) * limit,
-        take: limit,
-    });
+    const queryBuilder = this.proofsRepository.createQueryBuilder('proof')
+      .innerJoinAndSelect('proof.journey', 'journey')
+      .innerJoinAndSelect('journey.user', 'journeyUser')
+      .innerJoinAndSelect('proof.user', 'proofUser')
+      .leftJoinAndSelect('proof.supports', 'supports')
+      .leftJoinAndSelect('supports.user', 'supportUser')
+      .leftJoinAndSelect('proof.comments', 'comments')
+      .leftJoinAndSelect('comments.user', 'commentUser')
+      .where('proof.parentProofId IS NULL')
+      .andWhere('proof.userId NOT IN (:...usersToExclude)', { usersToExclude })
+      .andWhere('proof.aiLabels && :...topLabels', { topLabels }) // '&&' é o operador de "overlap" do PostgreSQL para arrays
+      .orderBy('proof.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
 
-    return recommendedProofs;
+    return queryBuilder.getMany();
   }
 }

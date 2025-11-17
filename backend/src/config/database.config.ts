@@ -14,12 +14,12 @@ export class DatabaseConfig implements TypeOrmOptionsFactory {
       : [__dirname + '/../**/*.entity.ts'];
 
     if (isProduction) {
-      // Configuração para o Cloud SQL em produção (usando IP Privado via VPC Connector)
+      // Configuração para o Cloud SQL em produção
       return {
         type: 'postgres',
         host: this.configService.get<string>('DB_HOST_PRIVATE'),
         port: 5432,
-        username: this.configService.get<string> 'DB_USER'),
+        username: this.configService.get<string>('DB_USER'),
         password: this.configService.get<string>('DB_PASSWORD'),
         database: this.configService.get<string>('DB_NAME'),
         entities: entitiesPath,

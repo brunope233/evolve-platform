@@ -10,11 +10,11 @@ function FeedPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('following'); // 'following' ou 'for-you'
+  const [activeTab, setActiveTab] = useState('following');
 
   const { ref, inView } = useInView({ threshold: 0 });
 
-  const fetchProofs = async (tab, currentPage, currentProofs) => {
+  const fetchProofs = async (tab, currentPage, currentProofs = []) => {
     setLoading(true);
     try {
       const endpoint = tab === 'following' ? '/feed' : '/feed/for-you';
@@ -28,33 +28,29 @@ function FeedPage() {
         setPage(currentPage + 1);
       }
     } catch (error) {
-      console.error("Erro ao buscar feed:", error);
+      console.error(`Erro ao buscar feed '${tab}':`, error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Reseta e busca os dados quando a aba muda
   useEffect(() => {
     setProofs([]);
     setPage(1);
     setHasMore(true);
-    setLoading(true);
-    fetchProofs(activeTab, 1, []);
+    fetchProofs(activeTab, 1);
   }, [activeTab]);
 
-  // Carrega mais provas quando o elemento 'ref' se torna visível
   useEffect(() => {
-    if (inView && !loading) {
+    if (inView && !loading && hasMore) {
       fetchProofs(activeTab, page, proofs);
     }
-  }, [inView, loading]);
+  }, [inView, loading, hasMore]);
 
   const renderContent = () => {
     if (loading && proofs.length === 0) {
       return <p>Carregando feed...</p>;
     }
-
     if (proofs.length > 0) {
       return (
         <div className={styles.proofsList}>
@@ -65,7 +61,6 @@ function FeedPage() {
         </div>
       );
     }
-
     if (activeTab === 'following') {
       return (
         <div className={styles.emptyFeed}>
@@ -77,7 +72,7 @@ function FeedPage() {
       return (
         <div className={styles.emptyFeed}>
           <h2>Seu feed "Para Você" está vazio!</h2>
-          <p>Interaja com provas (dando "apoios") para que possamos aprender sobre seus interesses e recomendar conteúdo.</p>
+          <p>Apoie (❤️) provas de outros usuários para que possamos aprender seus interesses e recomendar conteúdo.</p>
         </div>
       );
     }
@@ -85,6 +80,7 @@ function FeedPage() {
 
   return (
     <div className={styles.feedContainer}>
+      {/* ESTA É A SEÇÃO QUE ESTAVA FALTANDO */}
       <div className={styles.tabContainer}>
         <button 
           className={`${styles.tabButton} ${activeTab === 'following' ? styles.active : ''}`}
