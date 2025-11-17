@@ -37,4 +37,7 @@ async function bootstrap() {
   await app.listen(3001);
   console.log(`Evolve Backend is running on: ${await app.getUrl()}`);
 }
+
+// FORÇANDO UMA ATUALIZAÇÃO PARA O DEPLOY
+
 bootstrap();
