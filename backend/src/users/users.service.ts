@@ -40,26 +40,21 @@ export class UsersService {
   }
 
   async findOneByUsername(username: string, currentUserId?: string): Promise<any> {
-    const user = await this.usersRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.journeys', 'journeys')
-      .leftJoinAndSelect('journeys.user', 'journeyUser')
+    const user = await this.usersRepository.createQueryBuilder('user')
       .loadRelationCountAndMap('user.followerCount', 'user.followers')
       .loadRelationCountAndMap('user.followingCount', 'user.following')
       .where('LOWER(user.username) = LOWER(:username)', { username })
-      .orderBy('journeys.createdAt', 'DESC')
       .getOne();
 
     if (!user) { throw new NotFoundException(`User with username "${username}" not found`); }
 
     let isFollowing = false;
     if (currentUserId && currentUserId !== user.id) {
-      // Usamos uma consulta SQL crua e direta para a verificação mais rápida e confiável
-      const followRelation = await this.usersRepository.query(
-        `SELECT * FROM "user_followers" WHERE "userId_2" = $1 AND "userId_1" = $2`,
-        [user.id, currentUserId]
-      );
-      isFollowing = followRelation.length > 0;
+      const count = await this.usersRepository.createQueryBuilder("user")
+        .innerJoin("user.followers", "follower", "follower.id = :currentUserId", { currentUserId })
+        .where("user.id = :profileId", { profileId: user.id })
+        .getCount();
+      isFollowing = count > 0;
     }
     
     const { password, ...result } = user;
@@ -83,11 +78,8 @@ export class UsersService {
     const updatedUser = await this.usersRepository.save(user);
 
     if (oldAvatarUrl) {
-      try {
-        await this.uploadService.deleteFile(oldAvatarUrl);
-      } catch (error) {
-        console.error('Falha ao deletar avatar antigo do GCS:', error.message);
-      }
+      try { await this.uploadService.deleteFile(oldAvatarUrl); }
+      catch (error) { console.error('Falha ao deletar avatar antigo do GCS:', error.message); }
     }
     
     delete updatedUser.password;
@@ -100,20 +92,13 @@ export class UsersService {
       throw new NotFoundException(`Ação inválida.`);
     }
     
-    // Usamos o QueryBuilder para gerenciar a relação, que é o método mais robusto.
-    const relation = this.usersRepository.createQueryBuilder()
-      .relation(User, "following")
-      .of(followerId);
-      
-    // Verifica se a relação já existe
+    const relation = this.usersRepository.createQueryBuilder().relation(User, "following").of(followerId);
     const alreadyFollowing = await relation.loadMany().then(users => users.some(u => u.id === userToFollow.id));
 
     if (alreadyFollowing) {
-      // Deixar de seguir
       await relation.remove(userToFollow.id);
       return { following: false };
     } else {
-      // Seguir
       await relation.add(userToFollow.id);
       
       const follower = await this.findOneById(followerId);

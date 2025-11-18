@@ -11,23 +11,10 @@ export class JourneysController {
   @UseGuards(AuthGuard('jwt'))
   @Post()
   async create(@Body() body: any, @Request() req) {
-    // --- TESTE DE DEPURAÇÃO ---
-    console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    console.log('!!! ROTA POST /journeys FOI ALCANÇADA !!!');
-    console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    console.log('Corpo recebido:', body);
-
-    // Se o corpo chegar vazio, será um objeto vazio {}. Se chegar correto, terá as propriedades.
-    if (Object.keys(body).length === 0) {
-        console.error("ERRO: O corpo da requisição chegou vazio!");
-        throw new BadRequestException("O corpo da requisição está vazio ou em formato inválido.");
-    }
-
-    // Lógica de validação manual
     const createJourneyDto = new CreateJourneyDto();
     createJourneyDto.title = body.title;
     createJourneyDto.description = body.description;
-    createJourneyDto.tags = body.tags || [];
+    createJourneyDto.tags = body.tags || []; 
 
     const validationPipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
     try {
@@ -39,9 +26,13 @@ export class JourneysController {
   }
 
   @Get()
-  findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
+  findAll(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('author') authorUsername?: string,
+  ) {
     limit = limit > 100 ? 100 : limit;
-    return this.journeysService.findAll({ page, limit });
+    return this.journeysService.findAll({ page, limit, authorUsername });
   }
 
   @Get(':id')

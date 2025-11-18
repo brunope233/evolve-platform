@@ -7,32 +7,31 @@ import Link from 'next/link';
 import Avatar from '../../components/Avatar';
 import FollowButton from '../../components/FollowButton';
 
-export default function ProfilePage({ userProfile: initialProfile }) {
+export default function ProfilePage({ userProfile: initialProfile, journeys: initialJourneys }) {
   const [userProfile, setUserProfile] = useState(initialProfile);
+  const [journeys, setJourneys] = useState(initialJourneys);
   const { user: loggedInUser, isLoggedIn } = useAuth();
 
   useEffect(() => {
     setUserProfile(initialProfile);
-  }, [initialProfile]);
+    setJourneys(initialJourneys);
+  }, [initialProfile, initialJourneys]);
 
   if (!userProfile) {
     return <div>Usuário não encontrado.</div>;
   }
 
-  const isOwner = isLoggedIn && loggedInUser?.username === userProfile.username;
+  const isOwner = isLoggedIn && loggedInUser?.username.toLowerCase() === userProfile.username.toLowerCase();
   const canFollow = isLoggedIn && !isOwner;
 
   const handleFollowUpdate = (isNowFollowing) => {
-    setUserProfile(prevProfile => {
-      if (!prevProfile) return null;
-      return {
-        ...prevProfile,
-        followerCount: isNowFollowing 
-          ? prevProfile.followerCount + 1 
-          : prevProfile.followerCount - 1,
-        isFollowing: isNowFollowing,
-      }
-    });
+    setUserProfile(prevProfile => ({
+      ...prevProfile,
+      followerCount: isNowFollowing 
+        ? prevProfile.followerCount + 1 
+        : prevProfile.followerCount - 1,
+      isFollowing: isNowFollowing,
+    }));
   };
 
   return (
@@ -42,9 +41,9 @@ export default function ProfilePage({ userProfile: initialProfile }) {
         <h1 className={styles.username}>{userProfile.username}</h1>
         
         <div className={styles.statsContainer}>
-          <span><strong>{userProfile.journeys?.length || 0}</strong> Jornadas</span>
+          <span><strong>{journeys?.length || 0}</strong> Jornadas</span>
           <span><strong>{userProfile.followerCount}</strong> Seguidores</span>
-          <span><strong>{userProfile.followingCount}</strong> Seguindo</span>
+          <span><strong>{user.followingCount}</strong> Seguindo</span>
         </div>
 
         <p className={styles.bio}>{userProfile.bio || 'Este usuário ainda não adicionou uma bio.'}</p>
@@ -67,8 +66,8 @@ export default function ProfilePage({ userProfile: initialProfile }) {
 
       <h2 className={styles.journeysTitle}>Jornadas de {userProfile.username}</h2>
       <div className={styles.journeysGrid}>
-        {userProfile.journeys && userProfile.journeys.length > 0 ? (
-          userProfile.journeys.map((journey) => (
+        {journeys && journeys.length > 0 ? (
+          journeys.map((journey) => (
             <JourneyCard key={journey.id} journey={journey} />
           ))
         ) : (
@@ -83,16 +82,18 @@ export async function getServerSideProps(context) {
   try {
     const { username } = context.params;
     const { req } = context;
-    
     const token = req.cookies.token;
-    
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     
-    const res = await api.get(`/users/profile/${username}`, config);
+    // Faz as duas chamadas em paralelo para mais performance
+    const [profileRes, journeysRes] = await Promise.all([
+        api.get(`/users/profile/${username}`, config),
+        api.get(`/journeys?author=${username}`)
+    ]);
     
-    return { props: { userProfile: res.data } };
+    return { props: { userProfile: profileRes.data, journeys: journeysRes.data.items } };
   } catch (error) {
-    console.error(`Failed to fetch profile for ${context.params.username}:`, error.message);
-    return { props: { userProfile: null } };
+    console.error(`Failed to fetch profile page data for ${context.params.username}:`, error.message);
+    return { props: { userProfile: null, journeys: [] } };
   }
 }
