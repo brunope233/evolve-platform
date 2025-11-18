@@ -38,14 +38,28 @@ export class UsersService {
   }
 
   async findOneByUsername(username: string, currentUserId?: string): Promise<any> {
-    const user = await this.usersRepository.createQueryBuilder('user').leftJoinAndSelect('user.journeys', 'journeys').leftJoinAndSelect('journeys.user', 'journeyUser').loadRelationCountAndMap('user.followerCount', 'user.followers').loadRelationCountAndMap('user.followingCount', 'user.following').where('LOWER(user.username) = LOWER(:username)', { username }).orderBy('journeys.createdAt', 'DESC').getOne();
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.journeys', 'journeys')
+      .leftJoinAndSelect('journeys.user', 'journeyUser')
+      .loadRelationCountAndMap('user.followerCount', 'user.followers')
+      .loadRelationCountAndMap('user.followingCount', 'user.following')
+      .where('LOWER(user.username) = LOWER(:username)', { username })
+      .orderBy('journeys.createdAt', 'DESC')
+      .getOne();
+
     if (!user) { throw new NotFoundException(`User with username "${username}" not found`); }
 
     let isFollowing = false;
     if (currentUserId && currentUserId !== user.id) {
-        const currentUser = await this.usersRepository.findOne({ where: { id: currentUserId }, relations: ['following'] });
-        if (currentUser) { isFollowing = currentUser.following.some(followedUser => followedUser.id === user.id); }
+        // Usamos uma consulta SQL direta na tabela de junção para a verificação mais confiável
+        const followRelation = await this.usersRepository.query(
+            `SELECT * FROM "user_followers" WHERE "followerId" = $1 AND "followingId" = $2`,
+            [currentUserId, user.id]
+        );
+        isFollowing = followRelation.length > 0;
     }
+    
     const { password, ...result } = user;
     return { ...result, isFollowing };
   }
@@ -63,12 +77,11 @@ export class UsersService {
     const destination = `avatars/${userId}${extname(file.originalname)}`;
     await this.uploadService.uploadFile(file, destination);
 
-    user.avatarUrl = destination; // Salva apenas o caminho relativo
+    user.avatarUrl = destination;
     const updatedUser = await this.usersRepository.save(user);
 
     if (oldAvatarUrl) {
       try {
-        // O oldAvatarUrl agora é apenas o caminho relativo
         await this.uploadService.deleteFile(oldAvatarUrl);
       } catch (error) {
         console.error('Falha ao deletar avatar antigo do GCS:', error.message);
@@ -80,19 +93,30 @@ export class UsersService {
   }
 
   async toggleFollow(followerId: string, followingUsername: string): Promise<{ following: boolean }> {
-    const follower = await this.findOneById(followerId);
+    if (!followerId || !followingUsername) { throw new ForbiddenException('Ação inválida.'); }
+    
+    // Carrega o seguidor com sua lista de 'seguindo'
+    const follower = await this.usersRepository.findOne({
+        where: { id: followerId },
+        relations: ['following']
+    });
     const userToFollow = await this.usersRepository.findOne({ where: { username: ILike(followingUsername) } });
-    if (!userToFollow || follower.id === userToFollow.id) { throw new NotFoundException(`Usuário "${followingUsername}" não encontrado.`); }
+
+    if (!follower || !userToFollow || follower.id === userToFollow.id) {
+      throw new NotFoundException(`Ação de seguir inválida.`);
+    }
 
     const isFollowing = follower.following.some(user => user.id === userToFollow.id);
+
     if (isFollowing) {
       follower.following = follower.following.filter(user => user.id !== userToFollow.id);
     } else {
       follower.following.push(userToFollow);
       await this.notificationsService.createNotification({
-        recipient: userToFollow, sender: follower, type: NotificationType.NEW_FOLLOWER,
+        recipient: userToFollow, sender: follower, type: NotificationType.NEW_FOFOLLOWER,
       });
     }
+    
     await this.usersRepository.save(follower);
     return { following: !isFollowing };
   }
