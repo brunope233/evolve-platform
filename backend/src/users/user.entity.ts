@@ -16,7 +16,7 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ select: false, nullable: true }) // select: false protege a senha nas buscas
+  @Column({ select: false, nullable: true })
   password: string;
   
   @Column({ nullable: true })
@@ -33,8 +33,6 @@ export class User {
 
   // --- RELACIONAMENTOS ---
 
-  // Verifique se na sua entidade Journey a propriedade se chama 'user' ou 'author'. 
-  // Mantive 'user' conforme seu snippet, mas se der erro, mude para 'author'.
   @OneToMany(() => Journey, (journey) => journey.user)
   journeys: Journey[];
 
@@ -44,21 +42,18 @@ export class User {
   @OneToMany(() => Support, (support) => support.user)
   supports: Support[];
 
-  // Notificações Recebidas
   @OneToMany(() => Notification, (notification) => notification.recipient)
   notificationsReceived: Notification[];
 
-  // Notificações Enviadas (Importante para o sistema saber quem gerou a notificação)
   @OneToMany(() => Notification, (notification) => notification.sender)
   notificationsSent: Notification[];
 
-  // --- SISTEMA DE FOLLOW (CORRIGIDO) ---
-
-  // LADO PROPRIETÁRIO: "Quem eu sigo"
-  // O @JoinTable TEM QUE FICAR AQUI para o typeorm saber onde salvar.
+  // --- A CORREÇÃO ESTÁ AQUI ---
+  
+  // 1. "Quem eu sigo" (Lado Dono) -> CRIA A TABELA 'users_following'
   @ManyToMany(() => User, (user) => user.followers)
   @JoinTable({
-    name: 'users_following', // Nome da tabela no banco
+    name: 'users_following', // << NOME EXATO DA NOVA TABELA
     joinColumn: {
       name: 'followerId',
       referencedColumnName: 'id',
@@ -70,8 +65,7 @@ export class User {
   })
   following: User[];
 
-  // LADO INVERSO: "Quem me segue"
-  // Não tem @JoinTable aqui, ele espelha o de cima.
+  // 2. "Quem me segue" (Lado Inverso) -> APONTA PARA A MESMA TABELA
   @ManyToMany(() => User, (user) => user.following)
   followers: User[];
 
