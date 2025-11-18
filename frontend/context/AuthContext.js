@@ -15,22 +15,38 @@ export const AuthProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const router = useRouter();
 
+  // Opções padrão para Cookies em Produção
+  const cookieOptions = {
+    expires: 1, // 1 dia
+    path: '/',
+    secure: process.env.NODE_ENV === 'production', // Só envia em HTTPS se for produção
+    sameSite: 'Lax' // Importante para navegação normal funcionar
+  };
+
   useEffect(() => {
     const token = Cookies.get('token');
     if (token) {
       try {
         setAuthToken(token);
         const decodedUser = jwt_decode(token);
+        
+        // Verifica se o token expirou
+        const currentTime = Date.now() / 1000;
+        if (decodedUser.exp < currentTime) {
+            throw new Error("Token expirado");
+        }
+
         setUser(decodedUser);
+        
+        // Carrega notificações iniciais
         api.get('/notifications').then(res => {
           setNotifications(res.data);
           setUnreadCount(res.data.filter(n => !n.isRead).length);
-        });
+        }).catch(err => console.log("Erro ao carregar notificações:", err.message));
+
       } catch (error) {
-        console.error("Token inválido:", error);
-        Cookies.remove('token');
-        setAuthToken(null);
-        setUser(null);
+        console.error("Sessão inválida:", error);
+        logout(); // Limpa tudo se o token for ruim
       }
     }
     setLoading(false);
@@ -42,23 +58,26 @@ export const AuthProvider = ({ children }) => {
     const token = Cookies.get('token');
     if (!token) return;
 
-    // Conecta ao WebSocket, enviando o token para autenticação
-    const socket = io(process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', ''), {
-        auth: {
-            token: token
-        }
+    // Conecta ao WebSocket
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL 
+        ? process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', '')
+        : '';
+        
+    if (!socketUrl) return;
+
+    const socket = io(socketUrl, {
+        auth: { token }
     });
 
     const eventName = 'new_notification';
 
-socket.on(eventName, (newNotification) => {
-  // O cliente recebe TODAS as notificações, mas só reage se for para ele.
-  if (newNotification.recipientId === user.sub) {
-    toast('Você tem uma nova notificação!', { icon: '🔔' });
-    setNotifications(prev => [newNotification, ...prev]);
-    setUnreadCount(prev => prev + 1);
-  }
-});
+    socket.on(eventName, (newNotification) => {
+      if (newNotification.recipientId === user.sub || newNotification.recipientId === user.userId) {
+        toast('Você tem uma nova notificação!', { icon: '🔔' });
+        setNotifications(prev => [newNotification, ...prev]);
+        setUnreadCount(prev => prev + 1);
+      }
+    });
 
     return () => {
       socket.off(eventName);
@@ -74,6 +93,7 @@ socket.on(eventName, (newNotification) => {
             setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
         } catch (error) {
             console.error("Falha ao marcar como lidas:", error);
+            // Reverte se der erro
             setUnreadCount(notifications.filter(n => !n.isRead).length);
         }
     }
@@ -83,10 +103,16 @@ socket.on(eventName, (newNotification) => {
     try {
       const res = await api.post('/auth/login', { email, password });
       const { access_token } = res.data;
-      Cookies.set('token', access_token, { expires: 1, path: '/' });
+
+      // Salva o Cookie de forma segura para o SSR ler
+      Cookies.set('token', access_token, cookieOptions);
+      
+      // Configura o Axios para requisições no Client-Side
       setAuthToken(access_token);
+      
       const decodedUser = jwt_decode(access_token);
       setUser(decodedUser);
+      
       router.push('/');
       toast.success('Login bem-sucedido!');
     } catch (error) {
@@ -101,11 +127,13 @@ socket.on(eventName, (newNotification) => {
       email,
       password,
     });
+    
     toast.promise(promise, {
         loading: 'Registrando...',
-        success: 'Conta criada com sucesso! Por favor, faça o login.',
+        success: 'Conta criada! Faça login.',
         error: (err) => err.response?.data?.message || 'Falha no registro.',
     });
+
     try {
         await promise;
         router.push('/login');
@@ -115,7 +143,10 @@ socket.on(eventName, (newNotification) => {
   };
 
   const logout = () => {
-    Cookies.remove('token');
+    // Remove o cookie usando as mesmas opções para garantir que ele suma
+    Cookies.remove('token', cookieOptions);
+    Cookies.remove('token'); // Tenta remover a versão simples por garantia
+    
     setUser(null);
     setAuthToken(null);
     setNotifications([]);

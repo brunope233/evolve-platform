@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { User } from './user.entity';
@@ -20,7 +20,6 @@ export class UsersService {
     private readonly uploadService: UploadService,
   ) {}
 
-  // ... (outros métodos create, findByEmailOrUsername, findOneByEmailForAuth mantêm-se iguais) ...
   async create(createUserDto: CreateUserDto): Promise<User> {
     const newUser = this.usersRepository.create(createUserDto);
     const savedUser = await this.usersRepository.save(newUser);
@@ -33,7 +32,10 @@ export class UsersService {
   }
   
   async findOneByEmailForAuth(email: string): Promise<User | undefined> {
-    return this.usersRepository.createQueryBuilder('user').where('LOWER(user.email) = LOWER(:email)', { email }).addSelect('user.password').getOne();
+    return this.usersRepository.createQueryBuilder('user')
+      .where('LOWER(user.email) = LOWER(:email)', { email })
+      .addSelect('user.password')
+      .getOne();
   }
 
   async findOneById(id: string): Promise<User> {
@@ -42,33 +44,34 @@ export class UsersService {
     return user;
   }
 
-  // --- MÉTODO COM A LÓGICA DE CHECK DE FOLLOW ---
+  // --- CORREÇÃO PRINCIPAL AQUI ---
   async findOneByUsername(username: string, currentUserId?: string): Promise<any> {
-    const user = await this.usersRepository.createQueryBuilder('user')
+    // 1. Busca o perfil solicitado
+    const userProfile = await this.usersRepository.createQueryBuilder('user')
       .loadRelationCountAndMap('user.followerCount', 'user.followers')
       .loadRelationCountAndMap('user.followingCount', 'user.following')
       .where('LOWER(user.username) = LOWER(:username)', { username })
       .getOne();
 
-    if (!user) { throw new NotFoundException(`User with username "${username}" not found`); }
+    if (!userProfile) { throw new NotFoundException(`User with username "${username}" not found`); }
 
     let isFollowing = false;
 
-    if (currentUserId && currentUserId !== user.id) {
-      // Verifica se na lista de seguidores do PERFIL (user.id), existe o USUÁRIO LOGADO (currentUserId)
-      const count = await this.usersRepository.createQueryBuilder("user")
-        .innerJoin("user.followers", "follower") 
-        .where("user.id = :profileId", { profileId: user.id })
-        .andWhere("follower.id = :currentUserId", { currentUserId })
+    // 2. Verifica se o usuário logado segue este perfil
+    if (currentUserId && currentUserId !== userProfile.id) {
+      // PERGUNTA: Na lista de pessoas que o "currentUserId" segue (following), está o "userProfile.id"?
+      const count = await this.usersRepository.createQueryBuilder('u')
+        .leftJoin('u.following', 'f')
+        .where('u.id = :myId', { myId: currentUserId })
+        .andWhere('f.id = :profileId', { profileId: userProfile.id })
         .getCount();
-      
+
       isFollowing = count > 0;
-      this.logger.log(`[Service] Check Follow: User ${currentUserId} segue ${user.username}? ${isFollowing} (Count: ${count})`);
-    } else {
-        this.logger.log(`[Service] Check Follow Padrão (False): CurrentUser: ${currentUserId}, ProfileUser: ${user.id}`);
+      
+      this.logger.log(`[Check Follow] Usuário ${currentUserId} segue ${userProfile.username}? ${isFollowing} (Count: ${count})`);
     }
     
-    const { password, ...result } = user;
+    const { password, ...result } = userProfile;
     return { ...result, isFollowing };
   }
 
@@ -97,50 +100,50 @@ export class UsersService {
     return updatedUser;
   }
 
-  // --- MÉTODO OTIMIZADO PARA TOGGLE FOLLOW ---
+  // --- CORREÇÃO DA AÇÃO DE SEGUIR ---
   async toggleFollow(followerId: string, followingUsername: string): Promise<{ following: boolean }> {
-    const userToFollow = await this.usersRepository.findOne({ where: { username: ILike(followingUsername) } });
+    const targetUser = await this.usersRepository.findOne({ where: { username: ILike(followingUsername) } });
     
-    if (!userToFollow || followerId === userToFollow.id) {
-      throw new NotFoundException(`Usuário não encontrado ou ação inválida.`);
+    if (!targetUser || followerId === targetUser.id) {
+      throw new NotFoundException(`Ação inválida.`);
     }
-    
-    // Lógica otimizada: Verifica se já existe a relação direto no banco
-    // Assumindo que a relação é definida no User entity como @ManyToMany(() => User, user => user.followers)
-    // E que o lado "proprietário" (que tem o JoinTable) é o 'following'
-    
-    const queryBuilder = this.usersRepository.createQueryBuilder()
-        .relation(User, "following")
-        .of(followerId);
 
-    // Carrega APENAS a relação específica se ela existir
-    // Infelizmente TypeORM loadMany carrega tudo. Vamos usar raw SQL check se o loadMany for pesado,
-    // mas para corrigir o bug agora, vamos garantir a lógica de adição/remoção.
-
-    // Método mais seguro para verificar existência sem carregar lista gigante:
-    const count = await this.usersRepository.createQueryBuilder("user")
-        .innerJoin("user.following", "following")
-        .where("user.id = :followerId", { followerId })
-        .andWhere("following.id = :targetId", { targetId: userToFollow.id })
+    // 1. Verifica se já segue usando a MESMA lógica do findOneByUsername para garantir consistência
+    const count = await this.usersRepository.createQueryBuilder('u')
+        .leftJoin('u.following', 'f')
+        .where('u.id = :myId', { myId: followerId })
+        .andWhere('f.id = :targetId', { targetId: targetUser.id })
         .getCount();
-    
+
     const alreadyFollowing = count > 0;
+    
+    // Acessa a relação 'following' do usuário logado
+    const currentUser = await this.usersRepository.findOne({ 
+        where: { id: followerId },
+        relations: ['following'] // Carrega a lista atual para manipular
+    });
 
     if (alreadyFollowing) {
-      await queryBuilder.remove(userToFollow.id);
-      this.logger.log(`[Service] ${followerId} deixou de seguir ${followingUsername}`);
+      // REMOVER (Unfollow)
+      currentUser.following = currentUser.following.filter(u => u.id !== targetUser.id);
+      await this.usersRepository.save(currentUser);
+      
+      this.logger.log(`[Toggle] ${followerId} DEIXOU DE SEGUIR ${followingUsername}`);
       return { following: false };
     } else {
-      await queryBuilder.add(userToFollow.id);
+      // ADICIONAR (Follow)
+      if (!currentUser.following) currentUser.following = [];
+      currentUser.following.push(targetUser);
+      await this.usersRepository.save(currentUser);
       
-      const follower = await this.findOneById(followerId);
+      // Notificação
       await this.notificationsService.createNotification({
-        recipient: userToFollow,
-        sender: follower,
+        recipient: targetUser,
+        sender: currentUser,
         type: NotificationType.NEW_FOLLOWER,
       });
-      
-      this.logger.log(`[Service] ${followerId} começou a seguir ${followingUsername}`);
+
+      this.logger.log(`[Toggle] ${followerId} COMEÇOU A SEGUIR ${followingUsername}`);
       return { following: true };
     }
   }
