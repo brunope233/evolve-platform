@@ -17,8 +17,7 @@ export default function ProfilePage({ userProfile: initialProfile }) {
     setUserProfile(initialProfile);
     if (initialProfile) {
         setLoadingJourneys(true);
-        // Busca as jornadas do usuário em uma chamada separada no lado do cliente
-        api.get(`/journeys?author=${initialProfile.username}&limit=100`) // Pega até 100 jornadas
+        api.get(`/journeys?author=${initialProfile.username}&limit=100`)
             .then(res => setJourneys(res.data.items))
             .catch(err => {
                 console.error("Erro ao buscar jornadas do perfil:", err);
@@ -33,6 +32,8 @@ export default function ProfilePage({ userProfile: initialProfile }) {
   }
 
   const isOwner = isLoggedIn && loggedInUser?.username === userProfile.username;
+  // Correção lógica: Se eu já sigo, não deve aparecer a opção de seguir apenas se a lógica de UI pedir
+  // Mas aqui assumimos que o FollowButton trata o estado "Following/Follow"
   const canFollow = isLoggedIn && !isOwner;
 
   const handleFollowUpdate = (isNowFollowing) => {
@@ -64,7 +65,9 @@ export default function ProfilePage({ userProfile: initialProfile }) {
             Editar Perfil
           </Link>
         )}
-        {canFollow && (
+        
+        {/* Só renderiza o botão se não for o dono */}
+        {!isOwner && isLoggedIn && (
           <FollowButton 
             username={userProfile.username} 
             initialState={userProfile.isFollowing}
@@ -95,20 +98,31 @@ export async function getServerSideProps(context) {
   try {
     const { username } = context.params;
     const { req } = context;
-    const token = req.cookies.token;
+    const token = req.cookies.token; // Certifique-se que o cookie se chama 'token'
+
+    // [DEBUG LOG] - Verifique isso no LOG do Cloud Run (Frontend)
+    console.log(`[SSR] Buscando perfil: ${username}`);
+    console.log(`[SSR] Token presente? ${!!token}`);
     
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     
-    // Busca apenas os dados do perfil, sem as jornadas
+    // Certifique-se que a URL base da API está correta no ambiente SSR
+    // Em produção, deve ser a URL interna ou a URL pública completa
     const profileRes = await api.get(`/users/profile/${username}`, config);
     
+    // [DEBUG LOG]
+    console.log(`[SSR] isFollowing retornado do backend: ${profileRes.data.isFollowing}`);
+
     return { 
         props: { 
             userProfile: profileRes.data,
         } 
     };
   } catch (error) {
-    console.error(`Failed to fetch profile for ${context.params.username}:`, error.message);
+    console.error(`[SSR] Falha ao buscar perfil para ${context.params.username}:`, error.message);
+    if (error.response) {
+        console.error(`[SSR] Status: ${error.response.status}`);
+    }
     return { props: { userProfile: null } };
   }
 }
