@@ -5,9 +5,8 @@ import { Journey } from './journey.entity';
 import { CreateJourneyDto } from './dto/create-journey.dto';
 import { User } from 'src/users/user.entity';
 import { UpdateJourneyDto } from './dto/update-journey.dto';
-import * as fs from 'fs/promises';
-import { join } from 'path';
 import { Proof } from 'src/proofs/proof.entity';
+import { UploadService } from 'src/upload/upload.service';
 
 @Injectable()
 export class JourneysService {
@@ -16,6 +15,7 @@ export class JourneysService {
     private journeysRepository: Repository<Journey>,
     @InjectRepository(Proof)
     private proofsRepository: Repository<Proof>,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(createJourneyDto: CreateJourneyDto, user: User): Promise<Journey> {
