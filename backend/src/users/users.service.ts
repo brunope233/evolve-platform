@@ -20,7 +20,9 @@ export class UsersService {
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const newUser = this.usersRepository.create(createUserDto);
-    return this.usersRepository.save(newUser);
+    const savedUser = await this.usersRepository.save(newUser);
+    delete savedUser.password;
+    return savedUser;
   }
 
   async findByEmailOrUsername(email: string, username: string): Promise<User | undefined> {
@@ -32,7 +34,7 @@ export class UsersService {
   }
 
   async findOneById(id: string): Promise<User> {
-    const user = await this.usersRepository.findOne({ where: { id }, relations: ['following'] });
+    const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) { throw new NotFoundException(`User with ID "${id}" not found`); }
     return user;
   }
@@ -52,12 +54,12 @@ export class UsersService {
 
     let isFollowing = false;
     if (currentUserId && currentUserId !== user.id) {
-        // Usamos uma consulta SQL direta na tabela de junção para a verificação mais confiável
-        const followRelation = await this.usersRepository.query(
-            `SELECT * FROM "user_followers" WHERE "followerId" = $1 AND "followingId" = $2`,
-            [currentUserId, user.id]
-        );
-        isFollowing = followRelation.length > 0;
+      // Usamos uma consulta SQL crua e direta para a verificação mais rápida e confiável
+      const followRelation = await this.usersRepository.query(
+        `SELECT * FROM "user_followers" WHERE "userId_2" = $1 AND "userId_1" = $2`,
+        [user.id, currentUserId]
+      );
+      isFollowing = followRelation.length > 0;
     }
     
     const { password, ...result } = user;
@@ -93,31 +95,35 @@ export class UsersService {
   }
 
   async toggleFollow(followerId: string, followingUsername: string): Promise<{ following: boolean }> {
-    if (!followerId || !followingUsername) { throw new ForbiddenException('Ação inválida.'); }
-    
-    // Carrega o seguidor com sua lista de 'seguindo'
-    const follower = await this.usersRepository.findOne({
-        where: { id: followerId },
-        relations: ['following']
-    });
     const userToFollow = await this.usersRepository.findOne({ where: { username: ILike(followingUsername) } });
-
-    if (!follower || !userToFollow || follower.id === userToFollow.id) {
-      throw new NotFoundException(`Ação de seguir inválida.`);
-    }
-
-    const isFollowing = follower.following.some(user => user.id === userToFollow.id);
-
-    if (isFollowing) {
-      follower.following = follower.following.filter(user => user.id !== userToFollow.id);
-    } else {
-      follower.following.push(userToFollow);
-      await this.notificationsService.createNotification({
-        recipient: userToFollow, sender: follower, type: NotificationType.NEW_FOFOLLOWER,
-      });
+    if (!userToFollow || followerId === userToFollow.id) {
+      throw new NotFoundException(`Ação inválida.`);
     }
     
-    await this.usersRepository.save(follower);
-    return { following: !isFollowing };
+    // Usamos o QueryBuilder para gerenciar a relação, que é o método mais robusto.
+    const relation = this.usersRepository.createQueryBuilder()
+      .relation(User, "following")
+      .of(followerId);
+      
+    // Verifica se a relação já existe
+    const alreadyFollowing = await relation.loadMany().then(users => users.some(u => u.id === userToFollow.id));
+
+    if (alreadyFollowing) {
+      // Deixar de seguir
+      await relation.remove(userToFollow.id);
+      return { following: false };
+    } else {
+      // Seguir
+      await relation.add(userToFollow.id);
+      
+      const follower = await this.findOneById(followerId);
+      await this.notificationsService.createNotification({
+        recipient: userToFollow,
+        sender: follower,
+        type: NotificationType.NEW_FOLLOWER,
+      });
+
+      return { following: true };
+    }
   }
 }
