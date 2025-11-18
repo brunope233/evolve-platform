@@ -23,13 +23,16 @@ export default function ProfilePage({ userProfile: initialProfile }) {
   const canFollow = isLoggedIn && !isOwner;
 
   const handleFollowUpdate = (isNowFollowing) => {
-    setUserProfile(prevProfile => ({
-      ...prevProfile,
-      followerCount: isNowFollowing 
-        ? (prevProfile.followerCount || 0) + 1 
-        : (prevProfile.followerCount || 1) - 1,
-      isFollowing: isNowFollowing,
-    }));
+    setUserProfile(prevProfile => {
+      if (!prevProfile) return null;
+      return {
+        ...prevProfile,
+        followerCount: isNowFollowing 
+          ? prevProfile.followerCount + 1 
+          : prevProfile.followerCount - 1,
+        isFollowing: isNowFollowing,
+      }
+    });
   };
 
   return (
@@ -40,8 +43,8 @@ export default function ProfilePage({ userProfile: initialProfile }) {
         
         <div className={styles.statsContainer}>
           <span><strong>{userProfile.journeys?.length || 0}</strong> Jornadas</span>
-          <span><strong>{userProfile.followerCount || 0}</strong> Seguidores</span>
-          <span><strong>{userProfile.followingCount || 0}</strong> Seguindo</span>
+          <span><strong>{userProfile.followerCount}</strong> Seguidores</span>
+          <span><strong>{userProfile.followingCount}</strong> Seguindo</span>
         </div>
 
         <p className={styles.bio}>{userProfile.bio || 'Este usuário ainda não adicionou uma bio.'}</p>
@@ -82,6 +85,7 @@ export async function getServerSideProps(context) {
     const { req } = context;
     
     const token = req.cookies.token;
+    
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     
     const res = await api.get(`/users/profile/${username}`, config);
