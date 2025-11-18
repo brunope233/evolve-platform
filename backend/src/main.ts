@@ -1,43 +1,53 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Lista de origens permitidas para o CORS
+  // --- CACHE BUSTER: FORÇAR ATUALIZAÇÃO DO DEPLOY ---
+  console.log("VERSION: 1.6 - FORCING UPDATE - 18/11/2025 - FIX FOLLOWERS");
+
+  // Lista de origens permitidas
   const whitelist = [
-    'http://localhost:3000', // Para desenvolvimento local com Docker
-    'https://evolve-platform-478121.web.app', // A URL do seu frontend em produção
+    'http://localhost:3000',
+    'https://evolve-platform-478121.web.app',
+    'https://evolve-platform-478121.us-central1.run.app' // Adicionei o próprio domínio do backend por precaução
   ];
 
   app.enableCors({
     origin: function (origin, callback) {
-      // Permite requisições sem 'origin' (como de apps mobile ou Postman)
-      // e requisições da nossa whitelist.
+      // Permite requisições sem 'origin' (mobile/postman) ou da whitelist
       if (!origin || whitelist.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(new Error('Não permitido pela política de CORS'));
+        console.log(`CORS Blocked origin: ${origin}`); // Log para ajudar a debugar se bloquear
+        callback(new Error('Not allowed by CORS'));
       }
     },
-    credentials: true, // Permite o envio de cookies (importante para o futuro)
+    credentials: true, // OBRIGATÓRIO para cookies funcionarem
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization',
   });
 
-  // Reativamos um ValidationPipe global, mas com uma configuração mais permissiva
-  // que não deve mais causar os erros silenciosos.
+  // OBRIGATÓRIO: Middleware para ler cookies (Auth via SSR)
+  app.use(cookieParser());
+
   app.useGlobalPipes(new ValidationPipe({
       whitelist: true,
       transform: true,
-      skipMissingProperties: true, // Não falha se propriedades opcionais estiverem faltando
+      skipMissingProperties: true,
   }));
 
   app.setGlobalPrefix('api/v1');
   
-  await app.listen(3001);
-  console.log(`Evolve Backend is running on: ${await app.getUrl()}`);
+  // CORREÇÃO CRÍTICA PARA CLOUD RUN:
+  // Deve usar process.env.PORT e ouvir em 0.0.0.0
+  const port = process.env.PORT || 3001;
+  await app.listen(port, '0.0.0.0');
+  
+  console.log(`Evolve Backend is running on port: ${port}`);
 }
-
-// FORÇANDO UMA ATUALIZAÇÃO PARA O DEPLOY
 
 bootstrap();
