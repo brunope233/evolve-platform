@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Proof } from 'src/proofs/proof.entity';
 import { Support } from 'src/supports/support.entity';
 import { User } from 'src/users/user.entity';
-import { In, Repository } from 'typeorm'; // ← ESSA LINHA ESTAVA FALTANDO!
+import { In, Repository } from 'typeorm'; // ← AQUI ESTÁ O In QUE ESTAVA FALTANDO!!!
 
 @Injectable()
 export class FeedService {
@@ -16,9 +16,6 @@ export class FeedService {
     private supportsRepository: Repository<Support>,
   ) {}
 
-  // ================================
-  // Feed dos usuários que você segue
-  // ================================
   async getFeedForUser(userId: string, page: number = 1, limit: number = 10): Promise<Proof[]> {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
@@ -36,7 +33,7 @@ export class FeedService {
         parentProof: null,
         journey: {
           user: {
-            id: In(followingIds), // ← agora o In está importado
+            id: In(followingIds),
           },
         },
       },
@@ -54,25 +51,19 @@ export class FeedService {
     return proofs;
   }
 
-  // ================================
-  // Feed "Para Você" – baseado em aiLabels (com operador && do PostgreSQL)
-  // ================================
   async getForYouFeed(userId: string, page: number = 1, limit: number = 10): Promise<Proof[]> {
-    // 1. Últimos 50 supports do usuário
     const userSupports = await this.supportsRepository.find({
       where: { user: { id: userId } },
       relations: ['proof'],
       take: 50,
     });
 
-    // 2. Extrai os aiLabels das proofs que ele apoiou
     const interestLabels = userSupports
       .flatMap((support) => support.proof?.aiLabels || [])
       .filter(Boolean);
 
     if (interestLabels.length === 0) return [];
 
-    // 3. Top 5 labels mais frequentes
     const labelCounts = interestLabels.reduce((acc, label) => {
       acc[label] = (acc[label] || 0) + 1;
       return acc;
@@ -82,7 +73,6 @@ export class FeedService {
       .sort((a, b) => labelCounts[b] - labelCounts[a])
       .slice(0, 5);
 
-    // 4. Usuários para excluir (ele mesmo + quem ele segue)
     const user = await this.usersRepository.findOne({
       where: { id: userId },
       relations: ['following'],
@@ -91,7 +81,6 @@ export class FeedService {
     const followingIds = user?.following?.map((u) => u.id) || [];
     const usersToExclude = [userId, ...followingIds];
 
-    // 5. QueryBuilder com operador nativo && (overlap de arrays)
     const queryBuilder = this.proofsRepository.createQueryBuilder('proof');
 
     queryBuilder
