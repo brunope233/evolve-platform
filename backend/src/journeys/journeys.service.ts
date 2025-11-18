@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike } from 'typeorm';
+import { FindManyOptions, Repository, ILike } from 'typeorm';
 import { Journey } from './journey.entity';
 import { CreateJourneyDto } from './dto/create-journey.dto';
 import { User } from 'src/users/user.entity';
@@ -23,15 +23,35 @@ export class JourneysService {
     return this.journeysRepository.save(journey);
   }
 
-  async findAll(options: { page: number; limit: number }): Promise<{ items: Journey[], meta: any }> {
-    const page = Number(options.page) || 1;
-    const limit = Number(options.limit) || 10;
+  async findAll(options: { page: number; limit: number; authorUsername?: string }): Promise<{ items: Journey[], meta: any }> {
+    const { page = 1, limit = 10, authorUsername } = options;
     const skip = (page - 1) * limit;
-    const [items, totalItems] = await this.journeysRepository.findAndCount({
-      order: { createdAt: 'DESC' }, relations: ['user'], take: limit, skip: skip,
-    });
+  
+    const queryOptions: FindManyOptions<Journey> = {
+        order: { createdAt: 'DESC' },
+        relations: ['user'],
+        take: limit,
+        skip: skip,
+        where: {},
+    };
+  
+    if (authorUsername) {
+        queryOptions.where = { user: { username: ILike(authorUsername) } };
+    }
+  
+    const [items, totalItems] = await this.journeysRepository.findAndCount(queryOptions);
     const totalPages = Math.ceil(totalItems / limit);
-    return { items, meta: { totalItems, itemCount: items.length, itemsPerPage: limit, totalPages, currentPage: page }};
+  
+    return {
+      items,
+      meta: {
+        totalItems,
+        itemCount: items.length,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+      },
+    };
   }
 
   async findOneById(id: string): Promise<Journey> {
@@ -54,24 +74,18 @@ export class JourneysService {
     }
 
     if (journey.proofs) {
-      // Ordena todas as provas pela data de criação
-      journey.proofs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      
-      // Separa as provas principais das respostas (assists)
       const mainProofs = journey.proofs.filter(p => !p.parentProof);
       const assists = journey.proofs.filter(p => p.parentProof);
 
-      // Reatribui os assists aos seus pais corretos
       mainProofs.forEach(mainProof => {
-        mainProof.assists = assists.filter(a => a.parentProof.id === mainProof.id);
-        // Ordena os assists de cada prova principal
-        if (mainProof.assists) {
-            mainProof.assists.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        mainProof.assists = assists.filter(a => a.parentProof.id === mainProof.id)
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        if (mainProof.comments) {
+            mainProof.comments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         }
       });
-
-      // Substitui a lista de provas da jornada apenas pelas provas principais, já com seus assists aninhados
-      journey.proofs = mainProofs;
+      
+      journey.proofs = mainProofs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     }
 
     return journey;
@@ -85,7 +99,6 @@ export class JourneysService {
   }
 
   async remove(id: string, user: User): Promise<void> {
-    // Busca a jornada com TODAS as provas, incluindo assists aninhados, para garantir que todos os arquivos sejam deletados
     const journey = await this.journeysRepository.findOne({ 
         where: { id }, 
         relations: {
@@ -99,21 +112,17 @@ export class JourneysService {
     if (journey.user.id !== user.id) { throw new ForbiddenException('Você não tem permissão para deletar esta jornada'); }
 
     if (journey.proofs && journey.proofs.length > 0) {
-      // Constrói uma lista plana de todas as provas (principais + assists) para deletar os arquivos
       const allProofs = journey.proofs.flatMap(p => [p, ...(p.assists || [])]);
       
       for (const proof of allProofs) {
         if (proof.originalVideoUrl) {
-            const filePath = join(process.cwd(), proof.originalVideoUrl);
-            try { await fs.unlink(filePath); } catch (error) { console.error(error); }
+            await this.uploadService.deleteFile(proof.originalVideoUrl);
         }
         if (proof.thumbnailUrl) {
-            const thumbPath = join(process.cwd(), proof.thumbnailUrl);
-            try { await fs.unlink(thumbPath); } catch (error) { console.error(error); }
+            await this.uploadService.deleteFile(proof.thumbnailUrl);
         }
       }
     }
-    // A deleção da jornada em si vai deletar em cascata todas as provas e suas relações no DB
     await this.journeysRepository.remove(journey);
   }
 }
