@@ -1,6 +1,6 @@
-import { Journey } from '../journeys/journey.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, BeforeInsert, ManyToMany, JoinTable } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
+import { Journey } from '../journeys/journey.entity';
 import { Comment } from '../comments/comment.entity';
 import { Support } from '../supports/support.entity';
 import { Notification } from '../notifications/notification.entity';
@@ -16,7 +16,7 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ select: false })
+  @Column({ select: false, nullable: true }) // select: false protege a senha nas buscas
   password: string;
   
   @Column({ nullable: true })
@@ -25,6 +25,16 @@ export class User {
   @Column({ nullable: true })
   avatarUrl: string;
 
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  // --- RELACIONAMENTOS ---
+
+  // Verifique se na sua entidade Journey a propriedade se chama 'user' ou 'author'. 
+  // Mantive 'user' conforme seu snippet, mas se der erro, mude para 'author'.
   @OneToMany(() => Journey, (journey) => journey.user)
   journeys: Journey[];
 
@@ -34,21 +44,38 @@ export class User {
   @OneToMany(() => Support, (support) => support.user)
   supports: Support[];
 
+  // Notificações Recebidas
   @OneToMany(() => Notification, (notification) => notification.recipient)
-  notifications: Notification[];
+  notificationsReceived: Notification[];
 
-  @ManyToMany(() => User, user => user.following)
-  @JoinTable({ name: 'user_followers' })
-  followers: User[];
+  // Notificações Enviadas (Importante para o sistema saber quem gerou a notificação)
+  @OneToMany(() => Notification, (notification) => notification.sender)
+  notificationsSent: Notification[];
 
-  @ManyToMany(() => User, user => user.followers)
+  // --- SISTEMA DE FOLLOW (CORRIGIDO) ---
+
+  // LADO PROPRIETÁRIO: "Quem eu sigo"
+  // O @JoinTable TEM QUE FICAR AQUI para o typeorm saber onde salvar.
+  @ManyToMany(() => User, (user) => user.followers)
+  @JoinTable({
+    name: 'users_following', // Nome da tabela no banco
+    joinColumn: {
+      name: 'followerId',
+      referencedColumnName: 'id',
+    },
+    inverseJoinColumn: {
+      name: 'followingId',
+      referencedColumnName: 'id',
+    },
+  })
   following: User[];
 
-  @CreateDateColumn()
-  createdAt: Date;
+  // LADO INVERSO: "Quem me segue"
+  // Não tem @JoinTable aqui, ele espelha o de cima.
+  @ManyToMany(() => User, (user) => user.following)
+  followers: User[];
 
-  @UpdateDateColumn()
-  updatedAt: Date;
+  // --- HOOKS ---
 
   @BeforeInsert()
   async hashPassword() {
