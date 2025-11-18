@@ -1,6 +1,6 @@
 {
   "name": "evolve-backend",
-  "version": "0.1.0",
+  "version": "2.0.0-FORCE-UPDATE",
   "description": "Backend API for the Evolve Platform",
   "private": true,
   "scripts": {

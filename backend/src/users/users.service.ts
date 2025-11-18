@@ -41,20 +41,22 @@ export class UsersService {
     return user;
   }
 
-  // --- VERSÃO NOVA: SEM loadRelationCountAndMap ---
+  // --- VERSÃO FINAL: SEM loadRelationCountAndMap ---
   async findOneByUsername(username: string, currentUserId?: string): Promise<any> {
+    // Se este log não aparecer, o código é velho
+    this.logger.log(`[DEBUG V2] Buscando perfil: ${username}`); 
+
     const userProfile = await this.usersRepository.findOne({
         where: { username: ILike(username) },
-        relations: ['followers', 'following'] // <--- USAMOS ISSO AGORA
+        relations: ['followers', 'following'] 
     });
 
-    if (!userProfile) { throw new NotFoundException(`User with username "${username}" not found`); }
+    if (!userProfile) { throw new NotFoundException(`User not found`); }
 
     let isFollowing = false;
 
     if (currentUserId && currentUserId !== userProfile.id) {
-      isFollowing = userProfile.followers.some(follower => follower.id === currentUserId);
-      this.logger.log(`[Check Follow] User ${currentUserId} segue ${userProfile.username}? ${isFollowing}`);
+      isFollowing = userProfile.followers.some(f => f.id === currentUserId);
     }
     
     const followerCount = userProfile.followers.length;
