@@ -1,26 +1,20 @@
-# Use uma imagem Node.js padrão e robusta
-FROM node:18-bullseye
+FROM node:18-alpine
 
-# Define o diretório de trabalho
 WORKDIR /app
 
-# Copia os arquivos de dependência
 COPY package*.json ./
 
-# Instala TODAS as dependências para garantir que o build funcione
+# Instala dependências
 RUN npm install
 
-# Copia o resto do código fonte
 COPY . .
 
-# Executa o build para criar a pasta 'dist'
+# --- LINHA MÁGICA PARA QUEBRAR O CACHE (Mude o horário se precisar) ---
+ENV FORCE_BUILD_DATE="2025-11-18-20-55"
+
+# Compila o projeto
 RUN npm run build
 
-# Remove as dependências de desenvolvimento para a imagem final
-RUN npm prune --production
-
-# Expõe a porta que a aplicação vai usar
 EXPOSE 3001
 
-# O comando para iniciar a aplicação em produção
-CMD ["node", "dist/main.js"]
+CMD ["npm", "run", "start:prod"]
