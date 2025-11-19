@@ -15,12 +15,13 @@ export const AuthProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const router = useRouter();
 
-  // Opções padrão para Cookies em Produção
+  // --- CONFIGURAÇÃO SIMPLIFICADA DE COOKIE ---
+  // Removemos 'Secure' e 'SameSite' estrito para garantir que o SSR consiga ler
   const cookieOptions = {
-    expires: 1, // 1 dia
-    path: '/',
-    secure: process.env.NODE_ENV === 'production', // Só envia em HTTPS se for produção
-    sameSite: 'Lax' // Importante para navegação normal funcionar
+    expires: 7, // 7 dias
+    path: '/', 
+    // secure: false, // Desativado propositalmente para teste
+    // sameSite: 'Lax'
   };
 
   useEffect(() => {
@@ -30,7 +31,6 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(token);
         const decodedUser = jwt_decode(token);
         
-        // Verifica se o token expirou
         const currentTime = Date.now() / 1000;
         if (decodedUser.exp < currentTime) {
             throw new Error("Token expirado");
@@ -38,7 +38,6 @@ export const AuthProvider = ({ children }) => {
 
         setUser(decodedUser);
         
-        // Carrega notificações iniciais
         api.get('/notifications').then(res => {
           setNotifications(res.data);
           setUnreadCount(res.data.filter(n => !n.isRead).length);
@@ -46,7 +45,7 @@ export const AuthProvider = ({ children }) => {
 
       } catch (error) {
         console.error("Sessão inválida:", error);
-        logout(); // Limpa tudo se o token for ruim
+        logout(); 
       }
     }
     setLoading(false);
@@ -58,7 +57,6 @@ export const AuthProvider = ({ children }) => {
     const token = Cookies.get('token');
     if (!token) return;
 
-    // Conecta ao WebSocket
     const socketUrl = process.env.NEXT_PUBLIC_API_URL 
         ? process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', '')
         : '';
@@ -93,7 +91,6 @@ export const AuthProvider = ({ children }) => {
             setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
         } catch (error) {
             console.error("Falha ao marcar como lidas:", error);
-            // Reverte se der erro
             setUnreadCount(notifications.filter(n => !n.isRead).length);
         }
     }
@@ -104,12 +101,10 @@ export const AuthProvider = ({ children }) => {
       const res = await api.post('/auth/login', { email, password });
       const { access_token } = res.data;
 
-      // Salva o Cookie de forma segura para o SSR ler
+      // Salva o Cookie
       Cookies.set('token', access_token, cookieOptions);
       
-      // Configura o Axios para requisições no Client-Side
       setAuthToken(access_token);
-      
       const decodedUser = jwt_decode(access_token);
       setUser(decodedUser);
       
@@ -143,9 +138,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    // Remove o cookie usando as mesmas opções para garantir que ele suma
     Cookies.remove('token', cookieOptions);
-    Cookies.remove('token'); // Tenta remover a versão simples por garantia
+    Cookies.remove('token'); 
     
     setUser(null);
     setAuthToken(null);

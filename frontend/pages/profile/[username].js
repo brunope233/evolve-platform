@@ -6,34 +6,58 @@ import { useAuth } from '../../context/AuthContext';
 import Link from 'next/link';
 import Avatar from '../../components/Avatar';
 import FollowButton from '../../components/FollowButton';
+import { useRouter } from 'next/router';
 
 export default function ProfilePage({ userProfile: initialProfile }) {
+  const router = useRouter();
+  const { username } = router.query;
+  
   const [userProfile, setUserProfile] = useState(initialProfile);
   const [journeys, setJourneys] = useState([]);
   const [loadingJourneys, setLoadingJourneys] = useState(true);
   const { user: loggedInUser, isLoggedIn } = useAuth();
 
+  // --- EFEITO 1: Sincroniza dados iniciais ---
   useEffect(() => {
-    setUserProfile(initialProfile);
     if (initialProfile) {
-        setLoadingJourneys(true);
-        api.get(`/journeys?author=${initialProfile.username}&limit=100`)
-            .then(res => setJourneys(res.data.items))
-            .catch(err => {
-                console.error("Erro ao buscar jornadas do perfil:", err);
-                setJourneys([]);
-            })
-            .finally(() => setLoadingJourneys(false));
+        setUserProfile(initialProfile);
     }
   }, [initialProfile]);
 
+  // --- EFEITO 2: A Mágica do Client-Side (Corrige o botão) ---
+  useEffect(() => {
+    if (!username) return;
+
+    // 1. Busca as Jornadas
+    setLoadingJourneys(true);
+    api.get(`/journeys?author=${username}&limit=100`)
+        .then(res => setJourneys(res.data.items))
+        .catch(err => {
+            console.error("Erro ao buscar jornadas:", err);
+            setJourneys([]);
+        })
+        .finally(() => setLoadingJourneys(false));
+
+    // 2. RE-BUSCA O PERFIL (Isso corrige o status 'isFollowing')
+    // O navegador tem o token, então essa chamada vai autenticada!
+    if (isLoggedIn) {
+        api.get(`/users/profile/${username}`)
+           .then(res => {
+               console.log("Perfil atualizado pelo cliente:", res.data);
+               // Atualiza o estado com os dados reais (incluindo isFollowing: true)
+               setUserProfile(res.data); 
+           })
+           .catch(err => console.error("Erro ao atualizar perfil:", err));
+    }
+
+  }, [username, isLoggedIn]); // Executa quando muda o usuário ou o login
+
   if (!userProfile) {
-    return <div>Usuário não encontrado.</div>;
+    return <div style={{padding: '2rem', textAlign: 'center'}}>Carregando perfil...</div>;
   }
 
   const isOwner = isLoggedIn && loggedInUser?.username === userProfile.username;
-  // Correção lógica: Se eu já sigo, não deve aparecer a opção de seguir apenas se a lógica de UI pedir
-  // Mas aqui assumimos que o FollowButton trata o estado "Following/Follow"
+  // Mostra o botão se estiver logado e não for o dono
   const canFollow = isLoggedIn && !isOwner;
 
   const handleFollowUpdate = (isNowFollowing) => {
@@ -66,11 +90,11 @@ export default function ProfilePage({ userProfile: initialProfile }) {
           </Link>
         )}
         
-        {/* Só renderiza o botão se não for o dono */}
-        {!isOwner && isLoggedIn && (
+        {/* Renderiza o botão com o estado atualizado do userProfile */}
+        {canFollow && (
           <FollowButton 
             username={userProfile.username} 
-            initialState={userProfile.isFollowing}
+            initialState={userProfile.isFollowing} // Aqui virá 'true' após o useEffect rodar
             onUpdate={handleFollowUpdate}
           />
         )}
@@ -94,35 +118,19 @@ export default function ProfilePage({ userProfile: initialProfile }) {
   );
 }
 
+// O SSR continua existindo para SEO, mas não dependemos dele para auth
 export async function getServerSideProps(context) {
   try {
     const { username } = context.params;
-    const { req } = context;
-    const token = req.cookies.token; // Certifique-se que o cookie se chama 'token'
-
-    // [DEBUG LOG] - Verifique isso no LOG do Cloud Run (Frontend)
-    console.log(`[SSR] Buscando perfil: ${username}`);
-    console.log(`[SSR] Token presente? ${!!token}`);
+    // Busca pública (sem token) apenas para garantir que a página exista e tenha dados básicos
+    const profileRes = await api.get(`/users/profile/${username}`);
     
-    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-    
-    // Certifique-se que a URL base da API está correta no ambiente SSR
-    // Em produção, deve ser a URL interna ou a URL pública completa
-    const profileRes = await api.get(`/users/profile/${username}`, config);
-    
-    // [DEBUG LOG]
-    console.log(`[SSR] isFollowing retornado do backend: ${profileRes.data.isFollowing}`);
-
     return { 
         props: { 
             userProfile: profileRes.data,
         } 
     };
   } catch (error) {
-    console.error(`[SSR] Falha ao buscar perfil para ${context.params.username}:`, error.message);
-    if (error.response) {
-        console.error(`[SSR] Status: ${error.response.status}`);
-    }
     return { props: { userProfile: null } };
   }
 }
