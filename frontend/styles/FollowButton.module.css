@@ -1,0 +1,31 @@
+.followButton {
+  padding: 0.5rem 1.5rem;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  background-color: #0070f3; /* Cor azul padrão */
+  color: white;
+}
+
+.followButton:hover {
+  background-color: #005bb5;
+}
+
+.followButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Estilo quando já está seguindo (Botão cinza/outline) */
+.following {
+  background-color: transparent;
+  border: 1px solid #ccc;
+  color: #333;
+}
+
+.following:hover {
+  background-color: #f5f5f5;
+  border-color: #999;
+}

@@ -1,41 +1,69 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import styles from '../styles/FollowButton.module.css'; // Verifique se o caminho do CSS está certo para você
 import toast from 'react-hot-toast';
-import styles from '../styles/Profile.module.css'; // Vamos reutilizar os estilos
+import { useAuth } from '../context/AuthContext';
+import { useRouter } from 'next/router';
 
-const FollowButton = ({ username, initialState, onUpdate }) => {
+export default function FollowButton({ username, initialState, onUpdate }) {
   const [isFollowing, setIsFollowing] = useState(initialState);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { isLoggedIn } = useAuth();
+  const router = useRouter();
+
+  // --- A CORREÇÃO MÁGICA ---
+  // Isso garante que se o perfil carregar depois dizendo "Já segue",
+  // o botão atualiza visualmente.
+  useEffect(() => {
+    setIsFollowing(initialState);
+  }, [initialState]);
 
   const handleFollow = async () => {
-    setIsLoading(true);
-    // UI Otimista
-    const originalState = isFollowing;
-    setIsFollowing(prevState => !prevState);
-    onUpdate(!originalState); // Notifica o componente pai da mudança
+    if (!isLoggedIn) {
+      router.push('/login');
+      return;
+    }
+
+    setLoading(true);
+    // Otimismo: Troca o estado visual antes de o servidor responder (pra ficar rápido)
+    const previousState = isFollowing;
+    setIsFollowing(!previousState);
 
     try {
-      await api.post(`/users/profile/${username}/follow`);
+      const res = await api.post(`/users/profile/${username}/follow`);
+      
+      // O backend retorna { following: true/false }
+      const newState = res.data.following;
+      
+      setIsFollowing(newState);
+      
+      if (onUpdate) {
+        onUpdate(newState);
+      }
+
+      if (newState) {
+        toast.success(`Você está seguindo ${username}`);
+      } else {
+        toast('Deixou de seguir', { icon: '👋' });
+      }
+
     } catch (error) {
-      console.error("Falha ao seguir/deixar de seguir:", error);
-      toast.error("Ocorreu um erro.");
-      // Reverte a UI em caso de erro
-      setIsFollowing(originalState);
-      onUpdate(originalState);
+      console.error("Erro ao seguir:", error);
+      // Se der erro, desfaz a mudança visual
+      setIsFollowing(previousState);
+      toast.error('Erro ao realizar ação.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
     <button 
-      onClick={handleFollow}
-      disabled={isLoading}
       className={`${styles.followButton} ${isFollowing ? styles.following : ''}`}
+      onClick={handleFollow}
+      disabled={loading}
     >
-      {isLoading ? '...' : (isFollowing ? 'Seguindo' : 'Seguir')}
+      {loading ? '...' : (isFollowing ? 'Seguindo' : 'Seguir')}
     </button>
   );
-};
-
-export default FollowButton;
+}

@@ -41,32 +41,6 @@ export class UsersService {
     return user;
   }
 
-  // --- VERSÃO FINAL: SEM loadRelationCountAndMap ---
-  async findOneByUsername(username: string, currentUserId?: string): Promise<any> {
-    // Se este log não aparecer, o código é velho
-    this.logger.log(`[DEBUG V2] Buscando perfil: ${username}`); 
-
-    const userProfile = await this.usersRepository.findOne({
-        where: { username: ILike(username) },
-        relations: ['followers', 'following'] 
-    });
-
-    if (!userProfile) { throw new NotFoundException(`User not found`); }
-
-    let isFollowing = false;
-
-    if (currentUserId && currentUserId !== userProfile.id) {
-      isFollowing = userProfile.followers.some(f => f.id === currentUserId);
-    }
-    
-    const followerCount = userProfile.followers.length;
-    const followingCount = userProfile.following.length;
-
-    const { password, followers, following, ...result } = userProfile;
-    
-    return { ...result, followerCount, followingCount, isFollowing };
-  }
-
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.usersRepository.preload({ id: id, ...updateUserDto });
     if (!user) { throw new NotFoundException(`User with ID "${id}" not found`); }
@@ -83,31 +57,84 @@ export class UsersService {
     return updatedUser;
   }
 
-  async toggleFollow(followerId: string, followingUsername: string): Promise<{ following: boolean }> {
-    const targetUser = await this.usersRepository.findOne({ 
-        where: { username: ILike(followingUsername) },
-        relations: ['followers'] 
+  // --- VERSÃO FINAL LIMPA (RAW SQL) ---
+  async findOneByUsername(username: string, currentUserId?: string): Promise<any> {
+    const userProfile = await this.usersRepository.findOne({
+        where: { username: ILike(username) },
+        relations: ['journeys'] 
     });
+
+    if (!userProfile) { throw new NotFoundException(`User not found`); }
+
+    let isFollowing = false;
+    let followerCount = 0;
+    let followingCount = 0;
+
+    try {
+        const followersRes = await this.usersRepository.query(
+            `SELECT COUNT(*) as count FROM "users_following" WHERE "followingId" = $1`, 
+            [userProfile.id]
+        );
+        followerCount = parseInt(followersRes[0].count);
+
+        const followingRes = await this.usersRepository.query(
+            `SELECT COUNT(*) as count FROM "users_following" WHERE "followerId" = $1`, 
+            [userProfile.id]
+        );
+        followingCount = parseInt(followingRes[0].count);
+
+        if (currentUserId && String(currentUserId) !== String(userProfile.id)) {
+            const checkRes = await this.usersRepository.query(
+                `SELECT 1 FROM "users_following" WHERE "followerId" = $1 AND "followingId" = $2 LIMIT 1`,
+                [currentUserId, userProfile.id]
+            );
+            isFollowing = checkRes.length > 0;
+        }
+    } catch (e) {
+        this.logger.error(`Error fetching profile stats: ${e.message}`);
+    }
+
+    const { password, ...result } = userProfile;
     
+    return { 
+        ...result, 
+        followerCount, 
+        followingCount, 
+        isFollowing 
+    };
+  }
+
+  async toggleFollow(followerId: string, followingUsername: string): Promise<{ following: boolean }> {
+    const targetUser = await this.usersRepository.findOne({ where: { username: ILike(followingUsername) } });
     if (!targetUser || followerId === targetUser.id) throw new NotFoundException(`Ação inválida.`);
 
-    const me = await this.findOneById(followerId);
-    const alreadyFollowing = targetUser.followers.some(user => user.id === followerId);
+    const check = await this.usersRepository.query(
+        `SELECT 1 FROM "users_following" WHERE "followerId" = $1 AND "followingId" = $2`,
+        [followerId, targetUser.id]
+    );
+    const exists = check.length > 0;
 
-    if (alreadyFollowing) {
-      targetUser.followers = targetUser.followers.filter(user => user.id !== followerId);
-      await this.usersRepository.save(targetUser);
+    if (exists) {
+      await this.usersRepository.query(
+        `DELETE FROM "users_following" WHERE "followerId" = $1 AND "followingId" = $2`,
+        [followerId, targetUser.id]
+      );
       return { following: false };
     } else {
-      targetUser.followers.push(me);
-      await this.usersRepository.save(targetUser);
+      await this.usersRepository.query(
+        `INSERT INTO "users_following" ("followerId", "followingId") VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [followerId, targetUser.id]
+      );
+      
       try {
+        const me = await this.findOneById(followerId);
         await this.notificationsService.createNotification({
           recipient: targetUser,
           sender: me,
           type: NotificationType.NEW_FOLLOWER,
         });
       } catch (e) {}
+
       return { following: true };
     }
   }

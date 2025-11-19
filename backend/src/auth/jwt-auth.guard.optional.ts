@@ -3,8 +3,14 @@ import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
 export class JwtAuthGuardOptional extends AuthGuard('jwt') {
-  // Sobrescreve o método para não lançar erro se o usuário não estiver logado
   handleRequest(err, user, info, context) {
-    return user; // Retorna o usuário se encontrado, ou `false`/`null` se não, sem dar erro.
+    // Se houver erro (token inválido) ou não tiver usuário:
+    // Retorna null. O código vai tratar como "Visitante".
+    if (err || !user) {
+      return null;
+    }
+    
+    // Se estiver tudo certo, retorna o usuário logado.
+    return user;
   }
 }
