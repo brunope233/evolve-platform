@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Proof } from 'src/proofs/proof.entity';
 import { Support } from 'src/supports/support.entity';
 import { User } from 'src/users/user.entity';
-import { In, Not, Repository, ArrayContains } from 'typeorm';
+import { In, Not, Repository, ArrayContains, IsNull } from 'typeorm'; // Adicionei IsNull
 
 @Injectable()
 export class FeedService {
@@ -17,21 +17,24 @@ export class FeedService {
   ) {}
 
   async getFeedForUser(userId: string, page: number = 1, limit: number = 10): Promise<Proof[]> {
+    // 1. Carrega quem eu sigo
     const user = await this.usersRepository.findOne({
       where: { id: userId },
       relations: ['following'],
     });
 
+    // 2. PROTEÇÃO: Se não seguir ninguém, retorna vazio imediatamente (Evita Erro 500)
     if (!user || !user.following || user.following.length === 0) {
       return [];
     }
 
     const followingIds = user.following.map(followedUser => followedUser.id);
     
+    // 3. Busca provas
     const proofs = await this.proofsRepository.find({
       where: {
-        parentProof: In([null]),
-        user: { id: In(followingIds) },
+        parentProof: IsNull(), // Jeito correto de checar nulo
+        user: { id: In(followingIds) }, // Agora seguro porque o array não é vazio
       },
       relations: {
         journey: { user: true },
@@ -48,6 +51,7 @@ export class FeedService {
   }
 
   async getForYouFeed(userId: string, page: number = 1, limit: number = 10): Promise<Proof[]> {
+    // Logica de recomendação mantida
     const userSupports = await this.supportsRepository.find({
         where: { user: { id: userId } },
         relations: ['proof'],
@@ -55,6 +59,8 @@ export class FeedService {
     });
 
     const interestLabels = userSupports.flatMap(support => support.proof.aiLabels || []);
+    
+    // Se não tiver interesses, retorna vazio ou genérico
     if (interestLabels.length === 0) return [];
 
     const labelCounts = interestLabels.reduce((acc, label) => {
@@ -63,14 +69,17 @@ export class FeedService {
     }, {});
     const topLabels = Object.keys(labelCounts).sort((a, b) => labelCounts[b] - labelCounts[a]).slice(0, 5);
     
+    // Carrega quem eu já sigo para não recomendar (opcional)
     const user = await this.usersRepository.findOne({ where: {id: userId}, relations: ['following']});
-    const followingIds = user.following.map(u => u.id);
+    
+    // Monta lista de exclusão
+    const followingIds = user?.following ? user.following.map(u => u.id) : [];
     const usersToExclude = [userId, ...followingIds];
 
     const recommendedProofs = await this.proofsRepository.find({
         where: {
-            parentProof: In([null]),
-            user: { id: Not(In(usersToExclude)) },
+            parentProof: IsNull(),
+            user: { id: Not(In(usersToExclude)) }, // Exclui eu mesmo e quem eu sigo
             aiLabels: ArrayContains(topLabels),
         },
         relations: {
