@@ -10,7 +10,7 @@ RUN npm install
 COPY . .
 
 # --- LINHA MÁGICA PARA QUEBRAR O CACHE (Mude o horário se precisar) ---
-ENV FORCE_BUILD_DATE="2025-11-18-20-55"
+ENV FORCE_BUILD_DATE="2025-11-18-21-35-FIX-JOURNEYS"
 
 # Compila o projeto
 RUN npm run build
