@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindManyOptions, Repository, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Journey } from './journey.entity';
 import { CreateJourneyDto } from './dto/create-journey.dto';
 import { User } from 'src/users/user.entity';
@@ -23,23 +23,24 @@ export class JourneysService {
     return this.journeysRepository.save(journey);
   }
 
+  // --- CORREÇÃO AQUI: Uso de QueryBuilder para evitar erro 500 ---
   async findAll(options: { page: number; limit: number; authorUsername?: string }): Promise<{ items: Journey[], meta: any }> {
     const { page = 1, limit = 10, authorUsername } = options;
     const skip = (page - 1) * limit;
   
-    const queryOptions: FindManyOptions<Journey> = {
-        order: { createdAt: 'DESC' },
-        relations: ['user'],
-        take: limit,
-        skip: skip,
-        where: {},
-    };
+    // Cria a query manualmente para garantir que o JOIN funcione
+    const query = this.journeysRepository.createQueryBuilder('journey')
+      .leftJoinAndSelect('journey.user', 'user') // Junta com a tabela de usuários
+      .orderBy('journey.createdAt', 'DESC')
+      .take(limit)
+      .skip(skip);
   
+    // Filtro seguro por nome de usuário (Case Insensitive)
     if (authorUsername) {
-        queryOptions.where = { user: { username: ILike(authorUsername) } };
+        query.where('LOWER(user.username) = LOWER(:username)', { username: authorUsername });
     }
   
-    const [items, totalItems] = await this.journeysRepository.findAndCount(queryOptions);
+    const [items, totalItems] = await query.getManyAndCount();
     const totalPages = Math.ceil(totalItems / limit);
   
     return {
@@ -63,7 +64,7 @@ export class JourneysService {
                 user: true,
                 comments: { user: true },
                 supports: { user: true },
-                assists: { user: true },
+                assists: { user: true }, // Certifique-se que 'assists' existe na entity Proof
                 parentProof: true,
             },
         },
@@ -73,13 +74,18 @@ export class JourneysService {
       throw new NotFoundException(`Journey with ID "${id}" não encontrada`); 
     }
 
+    // Ordenação em memória (mantida do seu código original)
     if (journey.proofs) {
       const mainProofs = journey.proofs.filter(p => !p.parentProof);
       const assists = journey.proofs.filter(p => p.parentProof);
 
       mainProofs.forEach(mainProof => {
-        mainProof.assists = assists.filter(a => a.parentProof.id === mainProof.id)
-            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        // Verifica se 'assists' existe antes de filtrar
+        if (assists.length > 0) {
+             mainProof.assists = assists.filter(a => a.parentProof && a.parentProof.id === mainProof.id)
+                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        }
+        
         if (mainProof.comments) {
             mainProof.comments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         }
@@ -99,27 +105,23 @@ export class JourneysService {
   }
 
   async remove(id: string, user: User): Promise<void> {
+    // Busca simplificada para remoção
     const journey = await this.journeysRepository.findOne({ 
         where: { id }, 
-        relations: {
-            user: true,
-            proofs: {
-                assists: true,
-            }
-        }
+        relations: ['user', 'proofs'] 
     });
+
     if (!journey) { throw new NotFoundException(`Jornada com ID "${id}" não encontrada`); }
     if (journey.user.id !== user.id) { throw new ForbiddenException('Você não tem permissão para deletar esta jornada'); }
 
     if (journey.proofs && journey.proofs.length > 0) {
-      const allProofs = journey.proofs.flatMap(p => [p, ...(p.assists || [])]);
-      
-      for (const proof of allProofs) {
+      // Lógica de limpeza de arquivos
+      for (const proof of journey.proofs) {
         if (proof.originalVideoUrl) {
-            await this.uploadService.deleteFile(proof.originalVideoUrl);
+            try { await this.uploadService.deleteFile(proof.originalVideoUrl); } catch(e) {}
         }
         if (proof.thumbnailUrl) {
-            await this.uploadService.deleteFile(proof.thumbnailUrl);
+            try { await this.uploadService.deleteFile(proof.thumbnailUrl); } catch(e) {}
         }
       }
     }
